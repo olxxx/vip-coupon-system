@@ -15,7 +15,7 @@ protected:
     std::string name;                  // 券面显示名称 (如 "周末数码特惠满减券")
     double cost;                       // 购券费用 (0.0为免费领取, >0.0为付费购买)
     double min_spend;                  // 满减使用门槛 (元)
-    core::ProductCategory target_cat;  // 限制适用品类 (ALL为全场通用)
+    core::ProductCategory target_cat;  // 限制适用品类
     core::UserTier min_tier;           // 最低可用会员等级
     core::TimeConstraint time_limit;   // 时间生效约束
     bool is_used=false;                // 是否已被消费核销

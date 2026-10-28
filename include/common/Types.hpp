@@ -29,30 +29,12 @@ inline TierConfig getTierConfig(UserTier tier)
 {
     switch(tier)
     {
-        case UserTier::V0_NORMAL:
-        {
-            return {tier,"普通会员",1.00,0.0};
-        }
-        case UserTier::V1_BRONZE:
-        {
-            return {tier,"青铜会员",0.98,200.0};
-        }
-        case UserTier::V2_SILVER:
-        {
-            return {tier,"白银会员",0.95,800.0};
-        }
-        case UserTier::V3_GOLD:
-        {
-            return {tier,"黄金会员",0.90,2000.0};
-        }
-        case UserTier::V4_DIAMOND:
-        {
-            return {tier,"钻石会员",0.85,5000.0};
-        }
-        case UserTier::V5_SUPREME:
-        {
-            return {tier,"至尊会员",0.80,10000.0};
-        }
+        case UserTier::V0_NORMAL:	return {tier,"普通会员",1.00,0.0};
+        case UserTier::V1_BRONZE:	return {tier,"青铜会员",0.98,200.0};
+        case UserTier::V2_SILVER:	return {tier,"白银会员",0.95,800.0};
+        case UserTier::V3_GOLD:	    return {tier,"黄金会员",0.90,2000.0};
+        case UserTier::V4_DIAMOND:	return {tier,"钻石会员",0.85,5000.0};
+        case UserTier::V5_SUPREME:	return {tier,"至尊会员",0.80,10000.0};
     }
     return {UserTier::V0_NORMAL,"普通会员",1.00,0.0};
 }
@@ -74,37 +56,22 @@ enum class AdminRole
 // 商品品类划分
 enum class ProductCategory
 {
-    ALL=0,          // 全品类 (常用于全场通用优惠券)
     DIGITAL=1,      // 数码 3C
     CLOTHING=2,     // 服饰鞋包
     FOOD=3,         // 食品生鲜
-    DAILY=4         // 日用家居
+    DAILY=4,        // 日用百货
+    OTHER=5         // 其他百货
 };
 
 inline std::string getCategoryName(ProductCategory cat)
 {
     switch(cat)
     {
-        case ProductCategory::ALL:
-        {
-            return "全场通用";
-        }
-        case ProductCategory::DIGITAL:
-        {
-            return "数码3C";
-        }
-        case ProductCategory::CLOTHING:
-        {
-            return "服饰鞋包";
-        }
-        case ProductCategory::FOOD:
-        {
-            return "食品生鲜";
-        }
-        case ProductCategory::DAILY:
-        {
-            return "日用百货";
-        }
+        case ProductCategory::DIGITAL:	return "数码3C";
+        case ProductCategory::CLOTHING:	return "服饰鞋包";
+        case ProductCategory::FOOD:	    return "食品生鲜";
+        case ProductCategory::DAILY:	return "日用百货";
+        case ProductCategory::OTHER:	return "其他百货";
     }
     return "未知分类";
 }

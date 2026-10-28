@@ -92,3 +92,48 @@ add_custom_target(run
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Launching application..."
 )
+
+# ---------------------------------------------------------------------------
+#  Automated Testing System (CTest)
+# ---------------------------------------------------------------------------
+enable_testing()
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+    file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "tests/*.cpp")
+
+    # 提取除 src/main.cpp 之外的核心业务源文件 (用于测试程序链接)
+    set(CORE_SRC_FILES ${SRC_FILES})
+    list(FILTER CORE_SRC_FILES EXCLUDE REGEX ".*main\\.cpp$")
+
+    foreach(TEST_SRC ${TEST_SOURCES})
+        get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
+
+        add_executable(${TEST_NAME} ${TEST_SRC} ${CORE_SRC_FILES})
+        target_compile_features(${TEST_NAME} PRIVATE cxx_std_17)
+        target_include_directories(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+        if(MSVC)
+            target_compile_options(${TEST_NAME} PRIVATE /W4 /utf-8 /permissive-)
+        else()
+            target_compile_options(${TEST_NAME} PRIVATE -Wall -Wextra)
+        endif()
+        target_compile_definitions(${TEST_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+
+        target_link_libraries(${TEST_NAME} PRIVATE
+            nlohmann_json::nlohmann_json
+            ftxui::screen
+            ftxui::dom
+            ftxui::component
+        )
+
+        # 测试产出二进制隔离存放在 build/bin/tests 目录
+        set_target_properties(${TEST_NAME} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/tests"
+            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/tests"
+            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/tests"
+        )
+
+        # 注册至 CTest 自动化测试套件
+        add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    endforeach()
+endif()
