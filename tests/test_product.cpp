@@ -93,7 +93,7 @@ int main()
         // 修改品类
         p.setCategory(core::ProductCategory::OTHER);
         assert(p.getCategory() == core::ProductCategory::OTHER);
-        assert(p.getCategoryName() == "其他百货");
+        assert(p.getCategoryName() == "其他");
         std::cout << "[PASS] 5. 属性 Setter 防御逻辑校验" << std::endl;
     }
 

@@ -56,22 +56,24 @@ enum class AdminRole
 // 商品品类划分
 enum class ProductCategory
 {
+    ALL=0,          // 全品类通用 (专供优惠券使用：表示全场适用)
     DIGITAL=1,      // 数码 3C
     CLOTHING=2,     // 服饰鞋包
     FOOD=3,         // 食品生鲜
     DAILY=4,        // 日用百货
-    OTHER=5         // 其他百货
+    OTHER=5         // 其他
 };
 
 inline std::string getCategoryName(ProductCategory cat)
 {
     switch(cat)
     {
+        case ProductCategory::ALL:      return "全品类通用";
         case ProductCategory::DIGITAL:	return "数码3C";
         case ProductCategory::CLOTHING:	return "服饰鞋包";
         case ProductCategory::FOOD:	    return "食品生鲜";
         case ProductCategory::DAILY:	return "日用百货";
-        case ProductCategory::OTHER:	return "其他百货";
+        case ProductCategory::OTHER:	return "其他";
     }
     return "未知分类";
 }
