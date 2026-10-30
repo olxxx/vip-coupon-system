@@ -34,7 +34,7 @@ bool Product::setStock(int count)
 
 bool Product::setPrice(double num)
 {
-    if(num<0) return false;
+    if(num<=0) return false;
     price=num;
     return true;
 }
@@ -90,7 +90,7 @@ nlohmann::json Product::toJson() const
     return j;
 }
 
-Product Product::fromJson(const nlohmann::json& j)
+std::shared_ptr<Product> Product::fromJson(const nlohmann::json& j)
 {
     std::string id = j.at("id").get<std::string>();
     std::string name = j.at("name").get<std::string>();
@@ -98,7 +98,7 @@ Product Product::fromJson(const nlohmann::json& j)
     double price = j.at("price").get<double>();
     int stock = j.at("stock").get<int>();
 
-    return Product(id, name, category, price, stock);
+    return std::make_shared<Product>(id, name, category, price, stock);
 }
 
 };

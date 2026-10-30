@@ -1,6 +1,7 @@
 #pragma once
 #include "common/Types.hpp"
 #include <string>
+#include <memory>
 #include <nlohmann/json.hpp>
 
 namespace shop
@@ -17,9 +18,9 @@ private:
 public:
     Product();
     Product(std::string _id,std::string _name,core::ProductCategory _category,double _price,int _stock);
-        
+
     virtual ~Product() {}
-    
+
     //Getters
     std::string getId() const { return id; }
     std::string getName() const { return name; }
@@ -47,7 +48,7 @@ public:
 
     //JSON
     nlohmann::json toJson() const;
-    static Product fromJson(const nlohmann::json& j);
+    static std::shared_ptr<Product> fromJson(const nlohmann::json& j);
 };
 
 } // namespace shop

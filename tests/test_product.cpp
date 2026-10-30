@@ -129,7 +129,7 @@ int main()
         assert(j["price"] == 599.00);
         assert(j["stock"] == 15);
 
-        shop::Product restored = shop::Product::fromJson(j);
+        shop::Product restored = *shop::Product::fromJson(j);
         assert(restored == original);
         assert(restored.getName() == original.getName());
         assert(restored.getCategory() == original.getCategory());
