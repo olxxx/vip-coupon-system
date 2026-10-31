@@ -229,20 +229,22 @@ enum class AdminRole {
 
 // 商品品类划分
 enum class ProductCategory {
+    ALL = 0,          // 全品类通用 (专供优惠券使用：表示全场适用)
     DIGITAL = 1,      // 数码 3C
     CLOTHING = 2,     // 服饰鞋包
     FOOD = 3,         // 食品生鲜
     DAILY = 4,        // 日用百货
-    OTHER = 5         // 其他百货
+    OTHER = 5         // 其他
 };
 
 inline std::string getCategoryName(ProductCategory cat) {
     switch (cat) {
+        case ProductCategory::ALL:      return "全品类通用";
         case ProductCategory::DIGITAL:  return "数码3C";
         case ProductCategory::CLOTHING: return "服饰鞋包";
         case ProductCategory::FOOD:     return "食品生鲜";
         case ProductCategory::DAILY:    return "日用百货";
-        case ProductCategory::OTHER:    return "其他百货";
+        case ProductCategory::OTHER:    return "其他";
     }
     return "未知分类";
 }
@@ -329,6 +331,9 @@ protected:
     core::TimeConstraint time_limit;   // 时间生效约束 (工作日 / 周末 / 不限)
     bool is_used = false;              // 是否已被消费核销
 
+    // 基础属性序列化 (供派生类 toJson 复用)
+    nlohmann::json toJsonBase() const;
+
 public:
     Coupon(std::string template_id, std::string name, double cost, double min_spend,
            core::ProductCategory target_cat, core::UserTier min_tier,
@@ -355,7 +360,13 @@ public:
     void markAsUsed() { is_used = true; }
     void resetUsed() { is_used = false; }
 
-    // --- 纯虚接口：由具体派生券类实现 (梁佳毅后续实现，郭熠成无需关心) ---
+    // --- 业务语义快捷查询 ---
+    bool isFree() const { return cost <= 1e-4; }
+    bool isTemplate() const { return instance_id.empty(); }
+    bool isUniversalCategory() const { return target_cat == core::ProductCategory::ALL; }
+    bool hasTimeConstraint() const { return time_limit != core::TimeConstraint::ANYTIME; }
+
+    // --- 纯虚接口：由具体派生券类实现 ---
 
     // 获取券种中文类型描述 (如 "满减券", "百分比折扣券", "无门槛立减券")
     virtual std::string getTypeDescription() const = 0;
@@ -363,11 +374,17 @@ public:
     // 计算减免金额：输入满足品类条件的基数金额，输出减免的绝对金额 (元)
     virtual double calculateDiscount(double eligible_amount) const = 0;
 
-    // 生成展示详细规则的单行文本 (如 "满200减30 | 限数码 | 仅限周末")
+    // 生成展示详细规则的单行文本 (如 "满 200.00 减 30.00")
     virtual std::string getRuleDescription() const = 0;
 
     // 原型克隆 (用于从公共池发券到个人背包时生成独立实例)
     virtual std::unique_ptr<Coupon> clone() const = 0;
+
+    // 多态 JSON 序列化
+    virtual nlohmann::json toJson() const = 0;
+
+    // 安全克隆实例 (赋予新实例ID并复位未核销状态)
+    std::unique_ptr<Coupon> cloneInstance(const std::string& new_instance_id) const;
 };
 
 } // namespace shop
@@ -877,22 +894,18 @@ private:
 
 public:
     ThresholdCoupon(std::string template_id, std::string name, double cost, double min_spend,
-                    double reduce_amount, core::ProductCategory target_cat,
-                    core::UserTier min_tier, core::TimeConstraint time_limit, std::string instance_id = "")
-        : Coupon(std::move(template_id), std::move(name), cost, min_spend, target_cat, min_tier, time_limit, std::move(instance_id)),
-          reduce_amount(reduce_amount) {}
+                    core::ProductCategory target_cat, core::UserTier min_tier,
+                    core::TimeConstraint time_limit, double reduce_amount,
+                    std::string instance_id = "");
+
+    double getReduceAmount() const { return reduce_amount; }
 
     std::string getTypeDescription() const override { return "满减券"; }
-
-    double calculateDiscount(double eligible_amount) const override {
-        if (!core::isAmountGTE(eligible_amount, min_spend)) return 0.0;
-        return std::min(reduce_amount, eligible_amount);
-    }
-
+    double calculateDiscount(double eligible_amount) const override;
     std::string getRuleDescription() const override;
-    std::unique_ptr<Coupon> clone() const override {
-        return std::make_unique<ThresholdCoupon>(*this);
-    }
+    std::unique_ptr<Coupon> clone() const override { return std::make_unique<ThresholdCoupon>(*this); }
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<Coupon> fromJson(const nlohmann::json& j);
 };
 
 // 2. 百分比折扣券 (例如: 满 300 享 8 折，封顶减免 100 元)
@@ -902,52 +915,41 @@ private:
     double max_discount;  // 最高封顶优惠额 (0.0 为不设上限)
 
 public:
-    DiscountCoupon(std::string template_id, std::string name, double cost, double min_spend,
-                   double discount_rate, double max_discount,
+    DiscountCoupon(std::string template_id, std::string name, double cost, double min_spend, double discount_rate,
                    core::ProductCategory target_cat, core::UserTier min_tier,
-                   core::TimeConstraint time_limit, std::string instance_id = "")
-        : Coupon(std::move(template_id), std::move(name), cost, min_spend, target_cat, min_tier, time_limit, std::move(instance_id)),
-          discount_rate(discount_rate), max_discount(max_discount) {}
+                   core::TimeConstraint time_limit, double max_discount,
+                   std::string instance_id = "");
+
+    double getDiscountRate() const { return discount_rate; }
+    double getMaxDiscount() const { return max_discount; }
+    bool hasMaxDiscount() const { return max_discount > 1e-4; }
 
     std::string getTypeDescription() const override { return "折扣券"; }
-
-    double calculateDiscount(double eligible_amount) const override {
-        if (!core::isAmountGTE(eligible_amount, min_spend)) return 0.0;
-        double discount = eligible_amount * (1.0 - discount_rate);
-        if (max_discount > 0.0) {
-            discount = std::min(discount, max_discount);
-        }
-        return discount;
-    }
-
+    double calculateDiscount(double eligible_amount) const override;
     std::string getRuleDescription() const override;
-    std::unique_ptr<Coupon> clone() const override {
-        return std::make_unique<DiscountCoupon>(*this);
-    }
+    std::unique_ptr<Coupon> clone() const override { return std::make_unique<DiscountCoupon>(*this); }
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<Coupon> fromJson(const nlohmann::json& j);
 };
 
 // 3. 无门槛立减券 (例如: 5 元无门槛直减券)
 class CashCoupon : public Coupon {
 private:
-    double discount_amount; // 直减金额
+    double cash_amount; // 直减金额
 
 public:
-    CashCoupon(std::string template_id, std::string name, double cost, double discount_amount,
+    CashCoupon(std::string template_id, std::string name, double cost, double cash_amount,
                core::ProductCategory target_cat, core::UserTier min_tier,
-               core::TimeConstraint time_limit, std::string instance_id = "")
-        : Coupon(std::move(template_id), std::move(name), cost, 0.0, target_cat, min_tier, time_limit, std::move(instance_id)),
-          discount_amount(discount_amount) {}
+               core::TimeConstraint time_limit, std::string instance_id = "");
+
+    double getDiscountAmount() const { return cash_amount; }
 
     std::string getTypeDescription() const override { return "立减券"; }
-
-    double calculateDiscount(double eligible_amount) const override {
-        return std::min(discount_amount, eligible_amount);
-    }
-
+    double calculateDiscount(double eligible_amount) const override;
     std::string getRuleDescription() const override;
-    std::unique_ptr<Coupon> clone() const override {
-        return std::make_unique<CashCoupon>(*this);
-    }
+    std::unique_ptr<Coupon> clone() const override { return std::make_unique<CashCoupon>(*this); }
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<Coupon> fromJson(const nlohmann::json& j);
 };
 
 } // namespace shop

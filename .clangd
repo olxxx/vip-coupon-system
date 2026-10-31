@@ -2,6 +2,11 @@ CompileFlags:
   CompilationDatabase: build
   Add:
     - "-Iinclude"
+    - "-I../include"
+    - "-I_deps/json-src/include"
+    - "-Ibuild/_deps/json-src/include"
+    - "-I_deps/ftxui-src/include"
+    - "-Ibuild/_deps/ftxui-src/include"
     - "-std=c++17"
 
 Diagnostics:
