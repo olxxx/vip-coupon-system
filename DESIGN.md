@@ -401,8 +401,10 @@ public:
 
 ```cpp
 #pragma once
+#include "common/Types.hpp"
 #include <string>
 #include <memory>
+#include <nlohmann/json.hpp>
 
 namespace user {
 
@@ -413,6 +415,16 @@ enum class TransactionType {
     TIER_UPGRADE     // 会员等级跃迁变更
 };
 
+inline std::string getTransactionTypeName(TransactionType type) {
+    switch (type) {
+        case TransactionType::RECHARGE:        return "账户充值";
+        case TransactionType::EXPENSE:         return "购物消费";
+        case TransactionType::PURCHASE_COUPON: return "购券支出";
+        case TransactionType::TIER_UPGRADE:    return "等级跃迁";
+    }
+    return "未知类型";
+}
+
 // 账单记录抽象基类
 class TransactionRecord {
 protected:
@@ -420,6 +432,15 @@ protected:
     std::string timestamp;    // 产生时间 (格式: YYYY-MM-DD HH:MM:SS)
     double amount;            // 变动金额 (元，升级记录该项为 0.0)
     TransactionType type;     // 记录类型
+
+    nlohmann::json toJsonBase() const {
+        return nlohmann::json{
+            {"record_id", record_id},
+            {"timestamp", timestamp},
+            {"amount", amount},
+            {"type", static_cast<int>(type)}
+        };
+    }
 
 public:
     TransactionRecord(std::string id, std::string time, double amount, TransactionType type)
@@ -431,10 +452,14 @@ public:
     std::string getTimestamp() const { return timestamp; }
     double getAmount() const { return amount; }
     TransactionType getType() const { return type; }
+    std::string getTypeName() const { return getTransactionTypeName(type); }
 
     // 纯虚接口：格式化单行对账文本
-    // 行为描述：以对齐的排版输出流水摘要，例如："[充值] 2026-10-28 12:00:00 +¥500.00"
+    // 行为描述：以对齐的排版输出流水摘要，例如："[账户充值] 2026-10-28 12:00:00 +¥500.00"
     virtual std::string getFormattedText() const = 0;
+
+    // 多态 JSON 序列化
+    virtual nlohmann::json toJson() const = 0;
 };
 
 // 派生类 1：充值记录
@@ -443,27 +468,52 @@ private:
     std::string channel; // 充值渠道 (如 "微信支付", "兑换码")
 public:
     RechargeRecord(std::string id, std::string time, double amount, std::string channel);
+    std::string getChannel() const { return channel; }
     std::string getFormattedText() const override;
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<RechargeRecord> fromJson(const nlohmann::json& j);
 };
 
 // 派生类 2：消费支出记录
 class ExpenseRecord : public TransactionRecord {
 private:
     std::string order_id;      // 关联的订单 ID
-    std::string description;   // 消费摘要 (如 "购买商品结算", "购入[周末满减券]")
+    std::string description;   // 消费摘要 (如 "购买商品结算")
 public:
     ExpenseRecord(std::string id, std::string time, double amount, std::string order_id, std::string desc);
+    std::string getOrderId() const { return order_id; }
+    std::string getDescription() const { return description; }
     std::string getFormattedText() const override;
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<ExpenseRecord> fromJson(const nlohmann::json& j);
 };
 
-// 派生类 3：会员升级记录
+// 派生类 3：付费购券支出记录
+class PurchaseCouponRecord : public TransactionRecord {
+private:
+    std::string template_id;   // 购买的优惠券模板 ID
+    std::string coupon_name;   // 购买的券名称
+public:
+    PurchaseCouponRecord(std::string id, std::string time, double amount, std::string tpl_id, std::string cpn_name);
+    std::string getTemplateId() const { return template_id; }
+    std::string getCouponName() const { return coupon_name; }
+    std::string getFormattedText() const override;
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<PurchaseCouponRecord> fromJson(const nlohmann::json& j);
+};
+
+// 派生类 4：会员升级记录
 class UpgradeRecord : public TransactionRecord {
 private:
     std::string old_tier_name; // 原等级名称
     std::string new_tier_name; // 新等级名称
 public:
     UpgradeRecord(std::string id, std::string time, std::string old_tier, std::string new_tier);
+    std::string getOldTierName() const { return old_tier_name; }
+    std::string getNewTierName() const { return new_tier_name; }
     std::string getFormattedText() const override;
+    nlohmann::json toJson() const override;
+    static std::unique_ptr<UpgradeRecord> fromJson(const nlohmann::json& j);
 };
 
 } // namespace user
@@ -474,6 +524,7 @@ public:
 #pragma once
 #include "common/Types.hpp"
 #include <string>
+#include <nlohmann/json.hpp>
 
 namespace user {
 
@@ -482,6 +533,14 @@ protected:
     std::string username;      // 登录用户名 (唯一标识)
     std::string password_hash; // 密码哈希串或明文密码
     std::string created_at;    // 注册时间
+
+    nlohmann::json toJsonBase() const {
+        return nlohmann::json{
+            {"username", username},
+            {"password_hash", password_hash},
+            {"created_at", created_at}
+        };
+    }
 
 public:
     Account(std::string username, std::string password, std::string created_at)
@@ -492,6 +551,7 @@ public:
 
     std::string getUsername() const { return username; }
     std::string getCreatedAt() const { return created_at; }
+    std::string getPasswordHash() const { return password_hash; }
 
     // 密码比对与修改
     bool verifyPassword(const std::string& input_password) const {
@@ -506,6 +566,9 @@ public:
 
     // 纯虚接口：格式化输出账号简述信息
     virtual std::string getDisplaySummary() const = 0;
+
+    // 多态 JSON 序列化
+    virtual nlohmann::json toJson() const = 0;
 };
 
 } // namespace user
@@ -519,8 +582,10 @@ public:
 #include "user/Account.hpp"
 #include "user/TransactionRecord.hpp"
 #include "coupon/Coupon.hpp"
+#include "common/Types.hpp"
 #include <vector>
 #include <memory>
+#include <nlohmann/json.hpp>
 
 namespace user {
 
@@ -537,8 +602,13 @@ private:
     std::vector<std::unique_ptr<TransactionRecord>> transactions;
 
 public:
+    // 新用户注册构造函数
     CustomerAccount(std::string username, std::string password, std::string created_at,
                     double initial_balance = 1000.0);
+
+    // 持久化恢复完整构造函数
+    CustomerAccount(std::string username, std::string password, std::string created_at,
+                    double balance, double total_spent, core::UserTier tier);
 
     core::AccountType getAccountType() const override { return core::AccountType::CUSTOMER; }
     std::string getDisplaySummary() const override;
@@ -547,7 +617,11 @@ public:
     double getBalance() const { return balance; }
     double getTotalSpent() const { return total_spent; }
     core::UserTier getTier() const { return tier; }
+    std::string getTierName() const { return core::getTierConfig(tier).name; }
     double getDiscountRate() const; // 快捷获得当前等级的基础折扣率
+
+    void setBalance(double b) { balance = (b >= 0.0) ? b : 0.0; }
+    void setTotalSpent(double s) { total_spent = (s >= 0.0) ? s : 0.0; }
 
     // 账户充值：增加余额，生成 RechargeRecord 记入流水
     void recharge(double amount, const std::string& channel = "系统充值");
@@ -557,6 +631,9 @@ public:
     // 随后调用 checkAndPerformUpgrade() 判定是否触发升级。成功返回 true。
     bool deductBalance(double amount, const std::string& order_id);
 
+    // 购券专属扣费：扣减余额，生成 PurchaseCouponRecord 记入流水 (不重复累加商品消费)
+    bool deductForCoupon(double amount, const std::string& coupon_name, const std::string& template_id);
+
     // 会员等级判定与平滑升级逻辑：
     // 行为描述：比对 TierConfig 梯度，若当前 total_spent 达到了更高等级的门槛，
     // 执行晋级，生成一条 UpgradeRecord 流水。若发生升级返回 true，并通过 out_msg 输出晋升提示。
@@ -564,6 +641,12 @@ public:
 
     // 管理员后门特权接口：强制修改用户等级 (由 SuperAdmin 调用)
     void forceSetTier(core::UserTier new_tier);
+
+    // --- 成长体系仪表盘接口 (专供 UserCenterPage 渲染进度条与升级提示) ---
+    double getNextTierThreshold() const;
+    double getGrowthProgress() const;            // 返回 0.0 ~ 1.0 的成长值百分比
+    double getAmountNeededForNextTier() const;    // 距离下一级所需金额
+    bool isMaxTier() const { return tier == core::UserTier::V5_SUPREME; }
 
     // --- 卡券包管理接口 (纯实体层操作，业务校验由服务层 CouponManager 负责) ---
 
@@ -573,16 +656,39 @@ public:
     // 核销指定的优惠券 (根据实例唯一编号 instance_id 标记 is_used)
     bool consumeCoupon(const std::string& instance_id);
 
+    // 检索背包中的优惠券
+    std::shared_ptr<shop::Coupon> findCoupon(const std::string& instance_id) const;
+    bool hasCoupon(const std::string& instance_id) const;
+
     // 获取背包中所有的优惠券 (供结算算法与 TUI 展示)
     const std::vector<std::shared_ptr<shop::Coupon>>& getCoupons() const { return coupons; }
+
+    // 获取背包中未使用的有效券 (供最优规划算法与结算弹窗使用)
+    std::vector<std::shared_ptr<shop::Coupon>> getAvailableCoupons() const;
+
+    // 获取背包中已核销的券 (供个人中心历史券包展示)
+    std::vector<std::shared_ptr<shop::Coupon>> getUsedCoupons() const;
+
+    size_t getCouponCount() const { return coupons.size(); }
+    size_t getAvailableCouponCount() const;
 
     // 移除已使用的优惠券 (清理背包)
     void cleanUsedCoupons();
 
+    // 清空卡券背包 (供测试与重置使用)
+    void clearCoupons() { coupons.clear(); }
+
     // --- 账单流水接口 ---
+    void addTransaction(std::unique_ptr<TransactionRecord> record);
     const std::vector<std::unique_ptr<TransactionRecord>>& getTransactions() const {
         return transactions;
     }
+    size_t getTransactionCount() const { return transactions.size(); }
+    std::vector<const TransactionRecord*> getRecentTransactions(size_t limit = 10) const;
+
+    // --- JSON 序列化与反序列化 ---
+    nlohmann::json toJson() const override;
+    static std::shared_ptr<CustomerAccount> fromJson(const nlohmann::json& j);
 };
 
 } // namespace user
@@ -593,6 +699,7 @@ public:
 #pragma once
 #include "user/Account.hpp"
 #include "common/Types.hpp"
+#include <nlohmann/json.hpp>
 
 namespace user {
 
@@ -607,6 +714,10 @@ public:
 
     core::AccountType getAccountType() const override { return core::AccountType::ADMIN; }
     core::AdminRole getRole() const { return role; }
+    std::string getRoleName() const {
+        return role == core::AdminRole::SUPER_ADMIN ? "超级管理员" : "运营管理员";
+    }
+    void setRole(core::AdminRole new_role) { role = new_role; }
     std::string getDisplaySummary() const override;
 
     // --- 权限断言接口 ---
@@ -630,6 +741,10 @@ public:
     bool canResetSystem() const {
         return role == core::AdminRole::SUPER_ADMIN;
     }
+
+    // --- JSON 序列化与反序列化 ---
+    nlohmann::json toJson() const override;
+    static std::shared_ptr<AdminAccount> fromJson(const nlohmann::json& j);
 };
 
 } // namespace user
@@ -645,6 +760,7 @@ public:
 #include <string>
 #include <memory>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 namespace user {
 
@@ -660,8 +776,24 @@ private:
 public:
     UserManager() = default;
 
+    // 规模与容器状态 (对标 ProductManager)
+    size_t size() const { return customers.size() + admins.size(); }
+    size_t getCustomerCount() const { return customers.size(); }
+    size_t getAdminCount() const { return admins.size(); }
+    bool empty() const { return customers.empty() && admins.empty(); }
+    void clear();
+
+    // 存在性检索
+    bool hasCustomer(const std::string& username) const { return customers.find(username) != customers.end(); }
+    bool hasAdmin(const std::string& username) const { return admins.find(username) != admins.end(); }
+    bool removeCustomer(const std::string& username);
+    bool removeAdmin(const std::string& username);
+
     // 消费者注册 (自动初始化默认虚拟余额与 V0 等级)
     core::Result registerCustomer(const std::string& username, const std::string& password);
+
+    // 管理员账号注册
+    core::Result registerAdmin(const std::string& username, const std::string& password, core::AdminRole role);
 
     // 消费者登录：成功则设置 current_customer
     core::Result loginCustomer(const std::string& username, const std::string& password);
@@ -672,17 +804,25 @@ public:
     // 注销登出当前会话
     void logout();
 
-    // 状态获取
-    std::shared_ptr<CustomerAccount> getCurrentCustomer() const { return current_customer; }
-    std::shared_ptr<AdminAccount> getCurrentAdmin() const { return current_admin; }
+    // 会话与当前身份快捷查询
+    bool isLoggedIn() const { return isCustomerLoggedIn() || isAdminLoggedIn(); }
     bool isCustomerLoggedIn() const { return current_customer != nullptr; }
     bool isAdminLoggedIn() const { return current_admin != nullptr; }
+    std::shared_ptr<CustomerAccount> getCurrentCustomer() const { return current_customer; }
+    std::shared_ptr<AdminAccount> getCurrentAdmin() const { return current_admin; }
+    std::string getCurrentUsername() const;
+    core::AccountType getCurrentAccountType() const;
 
-    // 查询指定消费者
+    // 查询指定账号
     std::shared_ptr<CustomerAccount> findCustomer(const std::string& username) const;
+    std::shared_ptr<AdminAccount> findAdmin(const std::string& username) const;
 
-    // 获取所有消费者列表 (供管理员后台浏览与改级)
+    // 视图导出 (按用户名字典序升序稳定排序，保障 TUI 后台表格渲染防抖动)
     std::vector<std::shared_ptr<CustomerAccount>> getAllCustomers() const;
+    std::vector<std::shared_ptr<AdminAccount>> getAllAdmins() const;
+
+    // 管理员安全调级接口 (封装权限校验 + 实体修改 + 审计记录)
+    core::Result updateCustomerTier(const std::string& target_username, core::UserTier new_tier);
 
     // 注入管理员账号 (用于初始化默认 root 与 staff)
     void addAdmin(std::shared_ptr<AdminAccount> admin);
@@ -695,10 +835,16 @@ public:
         return admins;
     }
     void loadCustomerDirect(std::shared_ptr<CustomerAccount> customer);
+
+    // 整库 JSON 序列化与持久化
+    nlohmann::json toJson() const;
+    bool loadFromJson(const nlohmann::json& j);
+    static UserManager fromJson(const nlohmann::json& j);
 };
 
 } // namespace user
 ```
+
 
 ---
 
