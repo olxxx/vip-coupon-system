@@ -138,6 +138,35 @@ int main()
         std::cout << "[PASS] 7. JSON 序列化与反序列化往返校验" << std::endl;
     }
 
+    // 8. 测试 JSON 反序列化异常防御与默认值回退
+    {
+        // 必填项缺失 (缺少 id / name / price)
+        nlohmann::json missing_id = {{"name", "无ID商品"}, {"price", 99.0}};
+        assert(shop::Product::fromJson(missing_id) == nullptr);
+
+        nlohmann::json missing_name = {{"id", "PROD_2001"}, {"price", 99.0}};
+        assert(shop::Product::fromJson(missing_name) == nullptr);
+
+        nlohmann::json missing_price = {{"id", "PROD_2001"}, {"name", "无价格商品"}};
+        assert(shop::Product::fromJson(missing_price) == nullptr);
+
+        // 类型错误 (字符串代替浮点数价格)
+        nlohmann::json invalid_type = {{"id", "PROD_2001"}, {"name", "错误类型"}, {"price", "invalid_price"}};
+        assert(shop::Product::fromJson(invalid_type) == nullptr);
+
+        // 选填项缺省自动回退默认值 (默认分类 OTHER, 默认库存 0)
+        nlohmann::json minimal = {{"id", "PROD_2002"}, {"name", "极简商品"}, {"price", 49.9}};
+        auto restored = shop::Product::fromJson(minimal);
+        assert(restored != nullptr);
+        assert(restored->getId() == "PROD_2002");
+        assert(restored->getName() == "极简商品");
+        assert(restored->getPrice() == 49.9);
+        assert(restored->getCategory() == core::ProductCategory::OTHER);
+        assert(restored->getStock() == 0);
+
+        std::cout << "[PASS] 8. JSON 必填校验、类型容错与默认值回退校验" << std::endl;
+    }
+
     std::cout << "========================================" << std::endl;
     std::cout << "All Product tests PASSED successfully!" << std::endl;
     std::cout << "========================================" << std::endl;

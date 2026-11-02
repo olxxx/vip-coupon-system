@@ -208,13 +208,69 @@ int main()
         assert(isClose(cloned->calculateDiscount(test_order), 50.0));
 
         // 验证多态序列化
-        for (const auto& item : pool) {
+        for (const auto& item : pool)
+        {
             nlohmann::json item_j = item->toJson();
             assert(!item_j["type"].get<std::string>().empty());
             assert(!item_j["name"].get<std::string>().empty());
         }
 
         std::cout << "[PASS] 5. 异构容器多态派发与原型克隆校验" << std::endl;
+    }
+
+    // 6. 测试 JSON 反序列化异常防御、必填校验与状态恢复
+    {
+        // A. 满减券防御测试
+        // 门槛 min_spend 缺失 -> nullptr
+        nlohmann::json tc_no_min = {
+            {"type", "THRESHOLD"}, {"template_id", "T1"}, {"name", "满减券"}, {"reduce_amount", 20.0}
+        };
+        assert(shop::ThresholdCoupon::fromJson(tc_no_min) == nullptr);
+
+        // 减免额 reduce_amount 缺失 -> nullptr
+        nlohmann::json tc_no_reduce = {
+            {"type", "THRESHOLD"}, {"template_id", "T1"}, {"name", "满减券"}, {"min_spend", 100.0}
+        };
+        assert(shop::ThresholdCoupon::fromJson(tc_no_reduce) == nullptr);
+
+        // 类型不匹配 -> nullptr
+        nlohmann::json tc_wrong_type = {
+            {"type", "DISCOUNT"}, {"template_id", "T1"}, {"name", "券"}, {"min_spend", 100.0}, {"reduce_amount", 20.0}
+        };
+        assert(shop::ThresholdCoupon::fromJson(tc_wrong_type) == nullptr);
+
+        // B. 折扣券防御测试
+        // discount_rate 缺失 -> nullptr
+        nlohmann::json dc_no_rate = {
+            {"type", "DISCOUNT"}, {"template_id", "T2"}, {"name", "折扣券"}
+        };
+        assert(shop::DiscountCoupon::fromJson(dc_no_rate) == nullptr);
+
+        // 选填项省略 (min_spend 默认 0.0, max_discount 默认 0.0) -> 正常解析
+        nlohmann::json dc_minimal = {
+            {"type", "DISCOUNT"}, {"template_id", "T2"}, {"name", "无门槛打折"}, {"discount_rate", 0.9}
+        };
+        auto dc_restored = shop::DiscountCoupon::fromJson(dc_minimal);
+        assert(dc_restored != nullptr);
+        assert(isClose(dc_restored->getMinSpend(), 0.0));
+        assert(isClose(dc_restored->calculateDiscount(100.0), 10.0));
+
+        // C. 立减券防御测试
+        // cash_amount 缺失 -> nullptr
+        nlohmann::json cc_no_cash = {
+            {"type", "CASH"}, {"template_id", "T3"}, {"name", "立减券"}
+        };
+        assert(shop::CashCoupon::fromJson(cc_no_cash) == nullptr);
+
+        // D. is_used 状态无损恢复验证
+        nlohmann::json cc_used = {
+            {"type", "CASH"}, {"template_id", "T3"}, {"name", "已用立减券"}, {"cash_amount", 5.0}, {"is_used", true}
+        };
+        auto cc_restored = shop::CashCoupon::fromJson(cc_used);
+        assert(cc_restored != nullptr);
+        assert(cc_restored->isUsed());
+
+        std::cout << "[PASS] 6. 派生券 JSON 必填校验、类型守卫与 is_used 恢复校验" << std::endl;
     }
 
     std::cout << "========================================" << std::endl;

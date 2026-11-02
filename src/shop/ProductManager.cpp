@@ -119,10 +119,28 @@ ProductManager ProductManager::fromJson(const nlohmann::json& j)
 
 bool ProductManager::loadFromJson(const nlohmann::json& j)
 {
-    clear();
-    for(const auto& [id, product] : j.items())
-        products[id]=Product::fromJson(product);
-    return true;
+    try
+    {
+        if(!j.is_object())
+        {
+            return false;
+        }
+
+        clear();
+        for(const auto& [id, product] : j.items())
+        {
+            auto prod = Product::fromJson(product);
+            if(prod)
+            {
+                products[prod->getId()] = prod;
+            }
+        }
+        return true;
+    }
+    catch(const std::exception&)
+    {
+        return false;
+    }
 }
 
 }

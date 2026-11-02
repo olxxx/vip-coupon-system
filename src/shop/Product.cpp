@@ -92,13 +92,23 @@ nlohmann::json Product::toJson() const
 
 std::shared_ptr<Product> Product::fromJson(const nlohmann::json& j)
 {
-    std::string id = j.at("id").get<std::string>();
-    std::string name = j.at("name").get<std::string>();
-    core::ProductCategory category = static_cast<core::ProductCategory>(j.at("category").get<int>());
-    double price = j.at("price").get<double>();
-    int stock = j.at("stock").get<int>();
+    try
+    {
+        std::string id = j.at("id").get<std::string>();
+        std::string name = j.at("name").get<std::string>();
+        double price = j.at("price").get<double>();
 
-    return std::make_shared<Product>(id, name, category, price, stock);
+        auto category = static_cast<core::ProductCategory>(
+            j.value("category", static_cast<int>(core::ProductCategory::OTHER))
+        );
+        int stock = j.value("stock", 0);
+
+        return std::make_shared<Product>(std::move(id), std::move(name), category, price, stock);
+    }
+    catch (const std::exception&)
+    {
+        return nullptr;
+    }
 }
 
 };

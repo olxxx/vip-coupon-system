@@ -211,6 +211,33 @@ int main()
         std::cout << "[PASS] 9. JSON 序列化与反序列化全量往返校验" << std::endl;
     }
 
+    // 10. 测试 JSON 格式破损防御与脏数据自动过滤
+    {
+        shop::ProductManager mgr;
+
+        // 非 Object 顶层结构 (传入数组或标量)
+        nlohmann::json invalid_array = nlohmann::json::array({1, 2, 3});
+        assert(!mgr.loadFromJson(invalid_array));
+
+        nlohmann::json invalid_string = "not_an_object";
+        assert(!mgr.loadFromJson(invalid_string));
+
+        // 包含脏数据的对象：商品1正常，商品2缺少价格，商品3缺少名称
+        nlohmann::json mixed_json = {
+            {"PROD_OK", {{"id", "PROD_OK"}, {"name", "健康商品"}, {"price", 88.0}}},
+            {"PROD_BAD1", {{"id", "PROD_BAD1"}, {"name", "缺价格商品"}}},
+            {"PROD_BAD2", {{"id", "PROD_BAD2"}, {"price", 99.0}}}
+        };
+
+        assert(mgr.loadFromJson(mixed_json));
+        assert(mgr.size() == 1);
+        assert(mgr.hasProduct("PROD_OK"));
+        assert(!mgr.hasProduct("PROD_BAD1"));
+        assert(!mgr.hasProduct("PROD_BAD2"));
+
+        std::cout << "[PASS] 10. JSON 顶层结构防呆与坏数据自动过滤校验" << std::endl;
+    }
+
     std::cout << "========================================" << std::endl;
     std::cout << "All ProductManager tests PASSED successfully!" << std::endl;
     std::cout << "========================================" << std::endl;

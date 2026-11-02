@@ -33,18 +33,46 @@ nlohmann::json ThresholdCoupon::toJson() const
 
 std::unique_ptr<Coupon> ThresholdCoupon::fromJson(const nlohmann::json& j)
 {
-    if (j.value("type", "") != "THRESHOLD") return nullptr;
-    return std::make_unique<ThresholdCoupon>(
-        j["template_id"],
-        j["name"],
-        j["cost"],
-        j["min_spend"],
-        static_cast<core::ProductCategory>(j["target_cat"]),
-        static_cast<core::UserTier>(j["min_tier"]),
-        static_cast<core::TimeConstraint>(j["time_limit"]),
-        j["reduce_amount"],
-        j["instance_id"]
-    );
+    try
+    {
+        if (j.value("type", "") != "THRESHOLD")
+        {
+            return nullptr;
+        }
+
+        std::string template_id = j.at("template_id").get<std::string>();
+        std::string name = j.at("name").get<std::string>();
+        double min_spend = j.at("min_spend").get<double>();
+        double reduce_amount = j.at("reduce_amount").get<double>();
+
+        double cost = j.value("cost", 0.0);
+        auto target_cat = static_cast<core::ProductCategory>(j.value("target_cat", 0));
+        auto min_tier = static_cast<core::UserTier>(j.value("min_tier", 0));
+        auto time_limit = static_cast<core::TimeConstraint>(j.value("time_limit", 0));
+        std::string instance_id = j.value("instance_id", "");
+
+        auto coupon = std::make_unique<ThresholdCoupon>(
+            std::move(template_id),
+            std::move(name),
+            cost,
+            min_spend,
+            target_cat,
+            min_tier,
+            time_limit,
+            reduce_amount,
+            std::move(instance_id)
+        );
+
+        if (j.value("is_used", false))
+        {
+            coupon->markAsUsed();
+        }
+        return coupon;
+    }
+    catch (const std::exception&)
+    {
+        return nullptr;
+    }
 }
 
 // ============================================================================
@@ -78,19 +106,48 @@ nlohmann::json DiscountCoupon::toJson() const
 
 std::unique_ptr<Coupon> DiscountCoupon::fromJson(const nlohmann::json& j)
 {
-    if (j.value("type", "") != "DISCOUNT") return nullptr;
-    return std::make_unique<DiscountCoupon>(
-        j["template_id"],
-        j["name"],
-        j["cost"],
-        j["min_spend"],
-        j["discount_rate"],
-        static_cast<core::ProductCategory>(j["target_cat"]),
-        static_cast<core::UserTier>(j["min_tier"]),
-        static_cast<core::TimeConstraint>(j["time_limit"]),
-        j["max_discount"],
-        j["instance_id"]
-    );
+    try
+    {
+        if (j.value("type", "") != "DISCOUNT")
+        {
+            return nullptr;
+        }
+
+        std::string template_id = j.at("template_id").get<std::string>();
+        std::string name = j.at("name").get<std::string>();
+        double discount_rate = j.at("discount_rate").get<double>();
+
+        double cost = j.value("cost", 0.0);
+        double min_spend = j.value("min_spend", 0.0);
+        double max_discount = j.value("max_discount", 0.0);
+        auto target_cat = static_cast<core::ProductCategory>(j.value("target_cat", 0));
+        auto min_tier = static_cast<core::UserTier>(j.value("min_tier", 0));
+        auto time_limit = static_cast<core::TimeConstraint>(j.value("time_limit", 0));
+        std::string instance_id = j.value("instance_id", "");
+
+        auto coupon = std::make_unique<DiscountCoupon>(
+            std::move(template_id),
+            std::move(name),
+            cost,
+            min_spend,
+            discount_rate,
+            target_cat,
+            min_tier,
+            time_limit,
+            max_discount,
+            std::move(instance_id)
+        );
+
+        if (j.value("is_used", false))
+        {
+            coupon->markAsUsed();
+        }
+        return coupon;
+    }
+    catch (const std::exception&)
+    {
+        return nullptr;
+    }
 }
 
 // ============================================================================
@@ -119,17 +176,44 @@ nlohmann::json CashCoupon::toJson() const
 
 std::unique_ptr<Coupon> CashCoupon::fromJson(const nlohmann::json& j)
 {
-    if (j.value("type", "") != "CASH") return nullptr;
-    return std::make_unique<CashCoupon>(
-        j["template_id"],
-        j["name"],
-        j["cost"],
-        j["cash_amount"],
-        static_cast<core::ProductCategory>(j["target_cat"]),
-        static_cast<core::UserTier>(j["min_tier"]),
-        static_cast<core::TimeConstraint>(j["time_limit"]),
-        j["instance_id"]
-    );
+    try
+    {
+        if (j.value("type", "") != "CASH")
+        {
+            return nullptr;
+        }
+
+        std::string template_id = j.at("template_id").get<std::string>();
+        std::string name = j.at("name").get<std::string>();
+        double cash_amount = j.at("cash_amount").get<double>();
+
+        double cost = j.value("cost", 0.0);
+        auto target_cat = static_cast<core::ProductCategory>(j.value("target_cat", 0));
+        auto min_tier = static_cast<core::UserTier>(j.value("min_tier", 0));
+        auto time_limit = static_cast<core::TimeConstraint>(j.value("time_limit", 0));
+        std::string instance_id = j.value("instance_id", "");
+
+        auto coupon = std::make_unique<CashCoupon>(
+            std::move(template_id),
+            std::move(name),
+            cost,
+            cash_amount,
+            target_cat,
+            min_tier,
+            time_limit,
+            std::move(instance_id)
+        );
+
+        if (j.value("is_used", false))
+        {
+            coupon->markAsUsed();
+        }
+        return coupon;
+    }
+    catch (const std::exception&)
+    {
+        return nullptr;
+    }
 }
 
 } // namespace shop
