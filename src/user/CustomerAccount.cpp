@@ -41,9 +41,9 @@ namespace user {
             return buffer;
         }
 
-        std::string generateRecordId(const std::string& prefix) 
+        std::string generateRecordId(const std::string& prefix)
         //调用generateRecordId时，prefix为账户操作类型，"eg:generateRecordId("RECHARGE")"
-        
+
         {
             static std::atomic<std::uint64_t> sequence{ 0 };//创建计数器
 
@@ -220,7 +220,7 @@ namespace user {
         double amount,
         const std::string& order_id
     ) {
-        if (amount <= 1e-4
+        if (amount <= -1e-4
             || !core::isAmountGTE(balance, amount)) {
             return false;
         }
@@ -436,7 +436,7 @@ namespace user {
         return true;
     }//把用户背包中的一张优惠券标记为已使用。(核销)
 
-   
+
 
     bool CustomerAccount::hasCoupon(
         const std::string& instance_id
