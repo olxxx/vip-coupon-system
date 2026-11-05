@@ -1,12 +1,8 @@
 ﻿#include "user/CustomerAccount.hpp"
 
-#include "coupon/ConcreteCoupons.hpp"
+#include "persist/JsonFactories.hpp"
 
 #include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <ctime>
 #include <exception>
 #include <iomanip>
 #include <sstream>
@@ -17,52 +13,6 @@ namespace user {
     //放在匿名空间的辅助函数
     namespace {
 
-        std::string currentTimestamp() {
-            const auto now = std::chrono::system_clock::now();
-            const std::time_t raw_time = std::chrono::system_clock::to_time_t(now);
-            //获取当前时间并转换为time_t
-            std::tm local_time{};
-
-#ifdef _WIN32
-            localtime_s(&local_time, &raw_time);
-#else
-            localtime_r(&raw_time, &local_time);
-            //转换为本地年月日时分秒
-#endif
-
-            char buffer[32]{};
-            std::strftime(
-                buffer,
-                sizeof(buffer),
-                "%Y-%m-%d %H:%M:%S",
-                &local_time
-            );
-
-            return buffer;
-        }
-
-        std::string generateRecordId(const std::string& prefix)
-        //调用generateRecordId时，prefix为账户操作类型，"eg:generateRecordId("RECHARGE")"
-
-        {
-            static std::atomic<std::uint64_t> sequence{ 0 };//创建计数器
-
-            const auto milliseconds =
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()
-                ).count();//获取当前时间戳(单位:ms)
-
-            std::ostringstream stream;
-            stream << prefix
-                << "_"
-                << milliseconds
-                << "_"
-                << ++sequence;
-
-            return stream.str();
-            //返回值:"前缀-当前毫秒时间戳-编号(会自增)";"eg:RECHARGE_1762084512987_1""EXPENSE_1762084513012_2"
-        }
-
         core::UserTier parseTier(int value) {
             if (value < static_cast<int>(core::UserTier::V0_NORMAL)
                 || value > static_cast<int>(core::UserTier::V5_SUPREME)) {
@@ -71,57 +21,6 @@ namespace user {
 
             return static_cast<core::UserTier>(value);//整数转枚举
         }//core::UserTier在include/common/Types.hpp中
-
-
-        //-------优惠券 JSON 转换成对应的优惠券对象-------
-        std::shared_ptr<shop::Coupon> parseCoupon(
-            const nlohmann::json& json
-        ) {
-            const std::string type = json.value("type", "");
-            std::unique_ptr<shop::Coupon> coupon;
-
-            if (type == "THRESHOLD") {
-                coupon = shop::ThresholdCoupon::fromJson(json);
-            }
-            else if (type == "DISCOUNT") {
-                coupon = shop::DiscountCoupon::fromJson(json);
-            }
-            else if (type == "CASH") {
-                coupon = shop::CashCoupon::fromJson(json);
-            }
-
-            if (!coupon) {
-                return nullptr;
-            }
-
-            if (json.value("is_used", false)) {
-                coupon->markAsUsed();
-            }
-
-            return std::shared_ptr<shop::Coupon>(std::move(coupon));
-        }
-
-        //账单流水 JSON 转换成对应的流水对象
-        std::unique_ptr<TransactionRecord> parseTransaction(
-            const nlohmann::json& json
-        ) {
-            const std::string type = json.value("type", "");
-
-            if (type == "RECHARGE") {
-                return RechargeRecord::fromJson(json);
-            }
-            if (type == "EXPENSE") {
-                return ExpenseRecord::fromJson(json);
-            }
-            if (type == "PURCHASE_COUPON") {
-                return PurchaseCouponRecord::fromJson(json);
-            }
-            if (type == "UPGRADE") {
-                return UpgradeRecord::fromJson(json);
-            }
-
-            return nullptr;
-        }
 
     } // namespace
 
@@ -209,8 +108,8 @@ namespace user {
         balance += amount;
 
         addTransaction(std::make_unique<RechargeRecord>(
-            generateRecordId("RECHARGE"),
-            currentTimestamp(),
+            TransactionRecord::generateId("RECHARGE"),
+            core::getCurrentTimestamp(),
             amount,
             channel
         ));
@@ -233,8 +132,8 @@ namespace user {
         total_spent += amount;
 
         addTransaction(std::make_unique<ExpenseRecord>(
-            generateRecordId("EXPENSE"),
-            currentTimestamp(),
+            TransactionRecord::generateId("EXPENSE"),
+            core::getCurrentTimestamp(),
             amount,
             order_id,
             "购买商品结算"
@@ -261,8 +160,8 @@ namespace user {
         }
 
         addTransaction(std::make_unique<PurchaseCouponRecord>(
-            generateRecordId("COUPON"),
-            currentTimestamp(),
+            TransactionRecord::generateId("COUPON"),
+            core::getCurrentTimestamp(),
             amount,
             template_id,
             coupon_name
@@ -309,8 +208,8 @@ namespace user {
         tier = new_tier;
 
         addTransaction(std::make_unique<UpgradeRecord>(
-            generateRecordId("UPGRADE"),
-            currentTimestamp(),
+            TransactionRecord::generateId("UPGRADE"),
+            core::getCurrentTimestamp(),
             old_name,
             new_name
         ));
@@ -338,8 +237,8 @@ namespace user {
 
         //保存管理员操作流水
         addTransaction(std::make_unique<UpgradeRecord>(
-            generateRecordId("ADMIN_TIER"),
-            currentTimestamp(),
+            TransactionRecord::generateId("ADMIN_TIER"),
+            core::getCurrentTimestamp(),
             old_name,
             new_name
         ));
@@ -598,7 +497,7 @@ namespace user {
                 json.value("coupons", nlohmann::json::array());
 
             for (const auto& item : coupon_array) {
-                auto coupon = parseCoupon(item);
+                auto coupon = persist::CouponFactory::fromJson(item);
                 if (coupon) {
                     account->addCoupon(std::move(coupon));
                 }
@@ -611,7 +510,7 @@ namespace user {
                 );
 
             for (const auto& item : transaction_array) {
-                auto transaction = parseTransaction(item);
+                auto transaction = persist::TransactionFactory::fromJson(item);
                 if (transaction) {
                     account->addTransaction(std::move(transaction));
                 }

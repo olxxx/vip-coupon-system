@@ -1,5 +1,8 @@
 ﻿#include "user/TransactionRecord.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <utility>
@@ -16,6 +19,24 @@ namespace user {
         }
 
     } // namespace
+
+    std::string TransactionRecord::generateId(const std::string& prefix) {
+        static std::atomic<std::uint64_t> sequence{ 0 };
+
+        const auto milliseconds =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+
+        std::ostringstream stream;
+        stream << prefix
+            << "_"
+            << milliseconds
+            << "_"
+            << ++sequence;
+
+        return stream.str();
+    }
 
     // ---------------RechargeRecord:账户的充值记录--------------- 
 
@@ -49,18 +70,20 @@ namespace user {
     std::unique_ptr<RechargeRecord> RechargeRecord::fromJson(
         const nlohmann::json& json
     ) {
-        return std::make_unique<RechargeRecord>(
-            json.at("record_id").get<std::string>(),
-            //json.at("record_id")是读取id的JSON值，.get<std::string>()把它重新转化成字符串
-            json.at("timestamp").get<std::string>(),
-            json.at("amount").get<double>(),
-            json.at("channel").get<std::string>()
-        );//反序列化，把保存成 JSON 的一条充值记录，重新变成一个对象
+        try {
+            return std::make_unique<RechargeRecord>(
+                json.at("record_id").get<std::string>(),
+                json.at("timestamp").get<std::string>(),
+                json.at("amount").get<double>(),
+                json.value("channel", "未知渠道")
+            );
+        }
+        catch (const std::exception&) {
+            return nullptr;
+        }
     }
 
-    //toJson和fromJson两个函数起到保存数据的作用，当程序结束后，数据可以保存到user.json中，下次启动时，fromJson将JSON恢复成对象
-
-    //---------------ExpenseRecord:账户的消费记录-----------------
+    // ---------------ExpenseRecord:消费记录---------------
 
     ExpenseRecord::ExpenseRecord(std::string id,
         std::string time,
@@ -80,9 +103,9 @@ namespace user {
         return "[" + getTypeName() + "] "
             + getTimestamp()
             + " -¥" + formatAmount(getAmount())
-            + "（订单：" + order_id
-            + "；摘要：" + description + "）";
-    }//消费记录
+            + "（订单号：" + order_id
+            + "，摘要：" + description + "）";
+    }
 
     nlohmann::json ExpenseRecord::toJson() const {
         nlohmann::json json = toJsonBase();
@@ -96,16 +119,21 @@ namespace user {
     std::unique_ptr<ExpenseRecord> ExpenseRecord::fromJson(
         const nlohmann::json& json
     ) {
-        return std::make_unique<ExpenseRecord>(
-            json.at("record_id").get<std::string>(),
-            json.at("timestamp").get<std::string>(),
-            json.at("amount").get<double>(),
-            json.at("order_id").get<std::string>(),
-            json.at("description").get<std::string>()
-        );
+        try {
+            return std::make_unique<ExpenseRecord>(
+                json.at("record_id").get<std::string>(),
+                json.at("timestamp").get<std::string>(),
+                json.at("amount").get<double>(),
+                json.value("order_id", ""),
+                json.value("description", "")
+            );
+        }
+        catch (const std::exception&) {
+            return nullptr;
+        }
     }
 
-    // ---------------- PurchaseCouponRecord:购买优惠券 ----------------
+    // ---------------PurchaseCouponRecord:买优惠券消费记录---------------
 
     PurchaseCouponRecord::PurchaseCouponRecord(std::string id,
         std::string time,
@@ -125,9 +153,9 @@ namespace user {
         return "[" + getTypeName() + "] "
             + getTimestamp()
             + " -¥" + formatAmount(getAmount())
-            + "（优惠券：" + coupon_name
-            + "；模板：" + template_id + "）";
-    }//购买优惠券记录
+            + "（购买优惠券：" + coupon_name
+            + "，模板ID：" + template_id + "）";
+    }
 
     nlohmann::json PurchaseCouponRecord::toJson() const {
         nlohmann::json json = toJsonBase();
@@ -141,16 +169,21 @@ namespace user {
     std::unique_ptr<PurchaseCouponRecord> PurchaseCouponRecord::fromJson(
         const nlohmann::json& json
     ) {
-        return std::make_unique<PurchaseCouponRecord>(
-            json.at("record_id").get<std::string>(),
-            json.at("timestamp").get<std::string>(),
-            json.at("amount").get<double>(),
-            json.at("template_id").get<std::string>(),
-            json.at("coupon_name").get<std::string>()
-        );
+        try {
+            return std::make_unique<PurchaseCouponRecord>(
+                json.at("record_id").get<std::string>(),
+                json.at("timestamp").get<std::string>(),
+                json.at("amount").get<double>(),
+                json.value("template_id", ""),
+                json.value("coupon_name", "")
+            );
+        }
+        catch (const std::exception&) {
+            return nullptr;
+        }
     }
 
-    // ---------------- UpgradeRecord:会员等级升级 ----------------
+    // ---------------UpgradeRecord:升级记录---------------
 
     UpgradeRecord::UpgradeRecord(std::string id,
         std::string time,
@@ -168,9 +201,9 @@ namespace user {
     std::string UpgradeRecord::getFormattedText() const {
         return "[" + getTypeName() + "] "
             + getTimestamp()
-            + " " + old_tier_name
-            + " → " + new_tier_name;
-    }//升级记录（等级跃升）
+            + " 会员跃迁："
+            + old_tier_name + " -> " + new_tier_name;
+    }
 
     nlohmann::json UpgradeRecord::toJson() const {
         nlohmann::json json = toJsonBase();
@@ -184,12 +217,17 @@ namespace user {
     std::unique_ptr<UpgradeRecord> UpgradeRecord::fromJson(
         const nlohmann::json& json
     ) {
-        return std::make_unique<UpgradeRecord>(
-            json.at("record_id").get<std::string>(),
-            json.at("timestamp").get<std::string>(),
-            json.at("old_tier").get<std::string>(),
-            json.at("new_tier").get<std::string>()
-        );
+        try {
+            return std::make_unique<UpgradeRecord>(
+                json.at("record_id").get<std::string>(),
+                json.at("timestamp").get<std::string>(),
+                json.value("old_tier", ""),
+                json.value("new_tier", "")
+            );
+        }
+        catch (const std::exception&) {
+            return nullptr;
+        }
     }
 
 } // namespace user

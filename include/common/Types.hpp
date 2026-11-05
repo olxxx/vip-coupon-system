@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <chrono>
+#include <ctime>
 
 namespace core
 {
@@ -107,6 +109,24 @@ inline bool isWeekend(DayOfWeek day)
 inline bool isAmountGTE(double a,double b)
 {
     return a>=b-1e-4;
+}
+
+// 获取当前系统标准格式化时间戳 (YYYY-MM-DD HH:MM:SS)
+inline std::string getCurrentTimestamp()
+{
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t raw_time = std::chrono::system_clock::to_time_t(now);
+    std::tm local_time{};
+
+#ifdef _WIN32
+    localtime_s(&local_time, &raw_time);
+#else
+    localtime_r(&raw_time, &local_time);
+#endif
+
+    char buffer[32]{};
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &local_time);
+    return buffer;
 }
 
 } // namespace core

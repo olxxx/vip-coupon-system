@@ -53,6 +53,9 @@ namespace user {
         TransactionType getType() const { return type; }//读取这条流水记录的类型
         std::string getTypeName() const { return getTransactionTypeName(type); }
 
+        // 生成全局唯一流水号 (如 RECHARGE_1762084512987_1)
+        static std::string generateId(const std::string& prefix);
+
         // 纯虚接口：格式化单行对账文本
         // 行为描述：以对齐的排版输出流水摘要，例如："[账户充值] 2026-10-28 12:00:00 +¥500.00"
         virtual std::string getFormattedText() const = 0;

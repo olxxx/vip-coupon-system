@@ -1,8 +1,6 @@
 ﻿#include "user/UserManager.hpp"
 
 #include <algorithm>
-#include <chrono>
-#include <ctime>
 #include <exception>
 #include <tuple>
 #include <utility>
@@ -10,30 +8,6 @@
 namespace user {
 
     namespace {
-
-        std::string currentTimestamp() {
-            const auto now = std::chrono::system_clock::now();
-            const std::time_t raw_time =
-                std::chrono::system_clock::to_time_t(now);
-
-            std::tm local_time{};
-
-#ifdef _WIN32
-            localtime_s(&local_time, &raw_time);
-#else
-            localtime_r(&raw_time, &local_time);
-#endif
-
-            char buffer[32]{};
-            std::strftime(
-                buffer,
-                sizeof(buffer),
-                "%Y-%m-%d %H:%M:%S",
-                &local_time
-            );
-
-            return buffer;
-        }
 
         bool isValidTier(core::UserTier tier) {
             const int value = static_cast<int>(tier);
@@ -66,34 +40,24 @@ namespace user {
         current_admin.reset();
     }
 
-    bool UserManager::hasCustomer(
-        const std::string& username
-    ) const {
+    bool UserManager::hasCustomer(const std::string& username) const {
         return customers.find(username) != customers.end();
     }
 
-    bool UserManager::hasAdmin(
-        const std::string& username
-    ) const {
+    bool UserManager::hasAdmin(const std::string& username) const {
         return admins.find(username) != admins.end();
     }
 
-    bool UserManager::removeCustomer(
-        const std::string& username
-    ) {
-        if (current_customer
-            && current_customer->getUsername() == username) {
+    bool UserManager::removeCustomer(const std::string& username) {
+        if (current_customer && current_customer->getUsername() == username) {
             current_customer.reset();
         }
 
         return customers.erase(username) > 0;
     }
 
-    bool UserManager::removeAdmin(
-        const std::string& username
-    ) {
-        if (current_admin
-            && current_admin->getUsername() == username) {
+    bool UserManager::removeAdmin(const std::string& username) {
+        if (current_admin && current_admin->getUsername() == username) {
             current_admin.reset();
         }
 
@@ -119,7 +83,7 @@ namespace user {
         auto customer = std::make_shared<CustomerAccount>(
             username,
             password,
-            currentTimestamp()
+            core::getCurrentTimestamp()
         );
 
         customers.emplace(username, std::move(customer));
@@ -147,7 +111,7 @@ namespace user {
         auto admin = std::make_shared<AdminAccount>(
             username,
             password,
-            currentTimestamp(),
+            core::getCurrentTimestamp(),
             role
         );
 
@@ -160,10 +124,13 @@ namespace user {
         const std::string& username,
         const std::string& password
     ) {
-        const auto customer = findCustomer(username);
+        if (!hasCustomer(username)) {
+            return core::Result::fail("账号不存在");
+        }
 
+        auto customer = findCustomer(username);
         if (!customer) {
-            return core::Result::fail("消费者账号不存在");
+            return core::Result::fail("账号不存在");
         }
 
         if (!customer->verifyPassword(password)) {
@@ -180,14 +147,17 @@ namespace user {
         const std::string& username,
         const std::string& password
     ) {
-        const auto admin = findAdmin(username);
+        if (!hasAdmin(username)) {
+            return core::Result::fail("管理员账号不存在");
+        }
 
+        auto admin = findAdmin(username);
         if (!admin) {
             return core::Result::fail("管理员账号不存在");
         }
 
         if (!admin->verifyPassword(password)) {
-            return core::Result::fail("管理员密码错误");
+            return core::Result::fail("密码错误");
         }
 
         current_admin = admin;
@@ -236,31 +206,33 @@ namespace user {
     }
 
     core::AccountType UserManager::getCurrentAccountType() const {
-        if (current_admin) {
+        if (isAdminLoggedIn()) {
             return core::AccountType::ADMIN;
         }
 
         return core::AccountType::CUSTOMER;
     }
 
-    std::shared_ptr<CustomerAccount>
-        UserManager::findCustomer(
-            const std::string& username
-        ) const {
-        const auto found = customers.find(username);
-        return found == customers.end()
-            ? nullptr
-            : found->second;
+    std::shared_ptr<CustomerAccount> UserManager::findCustomer(
+        const std::string& username
+    ) const {
+        const auto iterator = customers.find(username);
+        if (iterator == customers.end()) {
+            return nullptr;
+        }
+
+        return iterator->second;
     }
 
-    std::shared_ptr<AdminAccount>
-        UserManager::findAdmin(
-            const std::string& username
-        ) const {
-        const auto found = admins.find(username);
-        return found == admins.end()
-            ? nullptr
-            : found->second;
+    std::shared_ptr<AdminAccount> UserManager::findAdmin(
+        const std::string& username
+    ) const {
+        const auto iterator = admins.find(username);
+        if (iterator == admins.end()) {
+            return nullptr;
+        }
+
+        return iterator->second;
     }
 
     std::vector<std::shared_ptr<CustomerAccount>>
