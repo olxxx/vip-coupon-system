@@ -136,6 +136,8 @@ int main()
         assert(!res_all_none.success);
 
         // 新用户一键申领测试
+        // 注意：此处会消耗 INST_1002，后续第 5、7 节的硬编码序号依赖本用例的执行顺序；
+        // 若在此处之前新增任何成功领券/购券用例，需同步更新后续所有 INST_xxxx 断言。
         user::CustomerAccount fresh_user("david", "pass", "2026-11-05", 100.0);
         auto res_all_ok = cpn_mgr.claimAllFreeCoupons(fresh_user);
         assert(res_all_ok.success);
@@ -166,7 +168,7 @@ int main()
         assert(res_buy.success);
         assert(poor_vip.getCouponCount() == 1);
         assert(isClose(poor_vip.getBalance(), 90.0)); // 110 - 20 = 90
-        assert(poor_vip.getCoupons()[0]->getInstanceId() == "INST_1002");
+        assert(poor_vip.getCoupons()[0]->getInstanceId() == "INST_1003");
         assert(poor_vip.getTransactionCount() >= 2); // 充值 + 购券流水
 
         assert(cpn_mgr.hasUserHeldCoupon(poor_vip, "TPL_PAID_DIGITAL"));
@@ -192,16 +194,16 @@ int main()
         nlohmann::json j = cpn_mgr.toJson();
         assert(j.contains("instance_counter"));
         assert(j.contains("public_pool"));
-        assert(j["instance_counter"] == 1002);
+        assert(j["instance_counter"] == 1003);
 
         shop::CouponManager restored = shop::CouponManager::fromJson(j);
         assert(restored.size() == 2);
-        assert(restored.getInstanceCounter() == 1002);
+        assert(restored.getInstanceCounter() == 1003);
         assert(restored.hasCoupon("TPL_PAID_DIGITAL"));
         assert(restored.hasCoupon("TPL_CASH_VIP"));
 
         // 新生成的券实例 ID 应该紧随其后
-        assert(restored.generateNextInstanceId() == "INST_1003");
+        assert(restored.generateNextInstanceId() == "INST_1004");
 
         std::cout << "[PASS] 7. JSON 序列化与反序列化及实例序号恢复测试通过" << std::endl;
     }
