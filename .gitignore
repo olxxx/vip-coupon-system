@@ -9,7 +9,6 @@ CMakeUserPresets.json
 bin/*.exe
 bin/*.pdb
 bin/*.ilk
-bin/vip-coupon-system
 
 # ---------------------------------------------------------------------------
 #  Editors / IDEs

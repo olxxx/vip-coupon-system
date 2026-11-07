@@ -165,7 +165,7 @@ bool StorageManager::writeJsonToFile(const std::filesystem::path& filepath, cons
             return false;
 
         file << std::setw(4) << json_data << std::endl;
-        return static_cast<bool>(file);
+        return true;
     }
     catch (const std::exception&)
     {
