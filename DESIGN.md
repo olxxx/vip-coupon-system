@@ -1184,13 +1184,22 @@ public:
 
 ### 8.3 优惠券发券与公共池管理 (`include/coupon/CouponManager.hpp`)
 **服务层（Service Layer）核心职责**：统筹优惠券的发行、申领与付费购买事务，维护领域实体（CustomerAccount）与券实体（Coupon）之间的交互边界。
+**业务约束规则**：
+- **同模板去重限持**：每个消费者名下同一种卡券模板（按 `template_id`）限持有一张未核销有效券；只有当该券已被消费核销（`isUsed() == true`）或在个人中心被清理后，方可再次申领或购买。
+- **一键领取免费券**：提供一键申领全部免费券事务，自动过滤已持有与等级不满足的券模板。
 
 ```cpp
 #pragma once
-#include "coupon/Coupon.hpp"
+#include "common/Types.hpp"
+#include "common/Result.hpp"
 #include "user/CustomerAccount.hpp"
-#include <vector>
+#include "coupon/Coupon.hpp"
+
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
+#include <nlohmann/json.hpp>
 
 namespace shop {
 
@@ -1202,26 +1211,48 @@ private:
 public:
     CouponManager() = default;
 
-    void registerCouponToPool(std::shared_ptr<Coupon> coupon);
-    const std::vector<std::shared_ptr<Coupon>>& getPublicPool() const {
-        return public_pool;
-    }
+    // 规模与状态
+    size_t size() const { return public_pool.size(); }
+    bool empty() const { return public_pool.empty(); }
+    void clear() { public_pool.clear(); }
+    bool hasCoupon(const std::string& template_id) const;
 
-    // 免费领券事务编排：
-    // 1. 查找 template_id 是否在公共池中；
-    // 2. 校验券是否免费 (cost == 0) 且用户等级满足 min_tier；
-    // 3. 克隆并赋予唯一 instance_id (如 "INST_1001")；
-    // 4. 调用 customer.addCoupon(...) 存入背包。
+    // 券池管理
+    bool registerCouponToPool(std::shared_ptr<Coupon> coupon);
+    bool removeCouponFromPool(const std::string& template_id);
+
+    // 事务编排：
+    // 1. 免费领券 (校验存在性、免费属性、会员等级，前置判重 hasUserHeldCoupon 防刷，克隆赋予 instance_id)
     core::Result claimFreeCoupon(const std::string& template_id, user::CustomerAccount& customer);
 
-    // 付费购券事务编排 (彻底解决实体与服务层职责混乱)：
-    // 1. 查找 template_id 并校验用户等级是否达标；
-    // 2. 检查用户余额，调用 customer.deductBalance(cost, "购入优惠券: " + name) 进行原子扣款与记流水；
-    // 3. 克隆券模板，分配唯一自增 instance_id；
-    // 4. 调用 customer.addCoupon(...) 存入背包。
+    // 2. 付费购券 (校验存在性、等级、前置判重 hasUserHeldCoupon、余额原子扣款与记流水、克隆赋予 instance_id)
     core::Result buyPaidCoupon(const std::string& template_id, user::CustomerAccount& customer);
 
+    // 3. 一键申领全部可用免费券 (自动跳过已拥有及等级不足的券模板)
+    core::Result claimAllFreeCoupons(user::CustomerAccount& customer);
+
+    // 检索与视图
+    // 检查用户是否已持有指定模板的有效优惠券 (同模板限持一张)
+    bool hasUserHeldCoupon(const user::CustomerAccount& customer, const std::string& template_id) const;
+
     std::shared_ptr<Coupon> findCouponInPool(const std::string& template_id) const;
+    const std::vector<std::shared_ptr<Coupon>>& getPublicPool() const { return public_pool; }
+    std::vector<std::shared_ptr<Coupon>> getFreeCoupons() const;
+    std::vector<std::shared_ptr<Coupon>> getPaidCoupons() const;
+    std::vector<std::shared_ptr<Coupon>> getCouponsByCategory(core::ProductCategory category) const;
+    std::vector<std::shared_ptr<Coupon>> getCouponsByTier(core::UserTier tier) const;
+    std::vector<std::shared_ptr<Coupon>> getEligibleCouponsForUser(const user::CustomerAccount& customer) const;
+    std::vector<std::shared_ptr<Coupon>> getCouponsByTimeConstraint(core::TimeConstraint time_limit) const;
+
+    // 实例编号管理
+    uint64_t getInstanceCounter() const { return instance_counter; }
+    void setInstanceCounter(uint64_t counter) { instance_counter = counter; }
+    std::string generateNextInstanceId();
+
+    // JSON 序列化与持久化
+    nlohmann::json toJson() const;
+    bool loadFromJson(const nlohmann::json& json);
+    static CouponManager fromJson(const nlohmann::json& json);
 };
 
 } // namespace shop
@@ -1316,6 +1347,10 @@ public:
 ## 10. 模块五：FTXUI 显式状态机与页面架构【梁佳毅 负责】
 
 基于 `ftxui_page_state_machine.md` 的**返回值解耦模式**（`PageAction` 驱动，零 `friend`，零 `protected`），状态机作为顶层组件调度页面栈。
+**极简无弹窗架构设计原则**：
+1. **全页面全屏栈管理，零悬浮弹窗（No Modal Overlay）**：取消任何模态小弹窗或浮层遮罩组件。所有页面（包含结算收银台 `CheckoutPage`）均作为独立全屏 `Page` 进入页面栈；所有操作（加购、领券、充值、调级等）结果统一在页面底部的单行 `status_msg` 状态栏即时反馈，杜绝焦点捕获错乱与 `Esc` 冲突。
+2. **固定容量历史栈（Bounded History Stack, MAX_STACK_DEPTH = 8）**：所有页面跳转采用 `Push` 压栈，支持按 `Esc` 或点击顶栏返回按钮沿历史操作路径逐层回退；若压栈后超过深度上限，自动淘汰栈底最旧记录，保证内存严格受控；登录与注销时彻底重置栈。
+3. **消费者端统一顶栏导航与资产状态**：`MallPage`、`CartPage`、`CouponSquarePage`、`UserCenterPage` 共享公共顶栏组件，展示登录身份、会员等级折扣、余额、券数、系统时间，并提供 1~4 页面一键跳转与动态返回上一页按钮。
 
 ### 10.1 全局上下文共享 (`include/ui/AppContext.hpp`)
 各页面通过轻量级引用的全局上下文访问底层业务管理器，实现 UI 与业务彻底解耦：
@@ -1357,6 +1392,7 @@ struct AppContext {
 ```cpp
 #pragma once
 #include <memory>
+#include <string>
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 
@@ -1368,9 +1404,10 @@ class Page;
 struct PageAction {
     enum class Type {
         None,   // 停留在当前页
-        Pop,    // 返回上一页 (Esc)
-        Push,   // 深入子页面 (如进入结算弹窗)
-        Change, // 平级替换当前页 (如登录成功切到商城)
+        Pop,    // 弹出栈顶，返回上一页历史 (Esc)
+        Push,   // 深入子页面 (推入新页面到栈顶)
+        Change, // 替换当前栈顶页面
+        Reset,  // 重置并清空历史栈，进入全新根页面 (登录/登出)
         Quit    // 退出程序
     };
 
@@ -1381,6 +1418,7 @@ struct PageAction {
     static PageAction pop() { return {Type::Pop, nullptr}; }
     static PageAction push(std::unique_ptr<Page> p) { return {Type::Push, std::move(p)}; }
     static PageAction change(std::unique_ptr<Page> p) { return {Type::Change, std::move(p)}; }
+    static PageAction reset(std::unique_ptr<Page> p) { return {Type::Reset, std::move(p)}; }
     static PageAction quit() { return {Type::Quit, nullptr}; }
 };
 
@@ -1395,9 +1433,10 @@ public:
 
     virtual void on_enter() {} // 进入页面生命周期
     virtual void on_exit() {}  // 离开页面生命周期
+    virtual std::string get_page_name() const = 0; // 页面标识名 (如 "商城货架", 供顶栏动态显示上一页名称)
 
-    // 核心事件分发机制 (彻底解决事件吞噬与无法使用原生 Input/Button 组件问题)：
-    // 1. 优先将事件交由内部挂载的 container 组件消费 (光标移动、鼠标点击、输入字符)；
+    // 核心事件分发机制：
+    // 1. 优先将事件交由内部挂载的 container 组件消费 (输入框打字、菜单光标移动、按钮回车)；
     // 2. 若子组件未消费，再由当前页面捕获全局热键 (如 Esc 触发 pop)；
     // 3. 将可能触发的页面跳转动作传出至 out_action，并如实返回 handled 状态。
     virtual bool handle_event(ftxui::Event event, PageAction& out_action) {
@@ -1419,7 +1458,7 @@ public:
 } // namespace ui
 ```
 
-### 10.3 页面栈管理器 (`include/ui/PageManager.hpp`)
+### 10.3 固定深度页面栈管理器 (`include/ui/PageManager.hpp`)
 ```cpp
 #pragma once
 #include "ui/Page.hpp"
@@ -1427,10 +1466,14 @@ public:
 #include <ftxui/component/screen_interactive.hpp>
 #include <vector>
 #include <memory>
+#include <string>
 
 namespace ui {
 
 class PageManager : public ftxui::ComponentBase {
+public:
+    static constexpr size_t MAX_STACK_DEPTH = 8; // 固定历史栈深度上限，杜绝内存无限堆积
+
 private:
     ftxui::ScreenInteractive& screen;
     std::vector<std::unique_ptr<Page>> page_stack;
@@ -1438,23 +1481,57 @@ private:
 public:
     explicit PageManager(ftxui::ScreenInteractive& screen) : screen(screen) {}
 
-    void change_page(std::unique_ptr<Page> page) {
-        if (!page_stack.empty()) {
-            page_stack.back()->on_exit();
-            page_stack.pop_back();
-        }
-        push_internal(std::move(page));
-    }
-
+    // 压栈深入：若目标页面与当前栈顶相同则忽略；超出上限自动淘汰栈底最旧记录
     void push_page(std::unique_ptr<Page> page) {
+        if (!page) return;
+        if (!page_stack.empty() && page_stack.back()->get_page_name() == page->get_page_name()) {
+            return;
+        }
+        if (page_stack.size() >= MAX_STACK_DEPTH) {
+            page_stack.front()->on_exit();
+            page_stack.erase(page_stack.begin());
+        }
         push_internal(std::move(page));
     }
 
+    // 弹栈回退：弹出当前栈顶并销毁，回到上一个历史页面
     void pop_page() {
+        if (page_stack.size() > 1) {
+            page_stack.back()->on_exit();
+            page_stack.pop_back();
+        } else {
+            // 栈底按 Esc 退出全屏主循环
+            screen.Exit();
+        }
+    }
+
+    // 平级替换栈顶
+    void change_page(std::unique_ptr<Page> page) {
+        if (!page) return;
         if (!page_stack.empty()) {
             page_stack.back()->on_exit();
             page_stack.pop_back();
         }
+        push_internal(std::move(page));
+    }
+
+    // 登录或注销时重置历史栈
+    void reset_stack(std::unique_ptr<Page> root_page) {
+        while (!page_stack.empty()) {
+            page_stack.back()->on_exit();
+            page_stack.pop_back();
+        }
+        if (root_page) {
+            push_internal(std::move(root_page));
+        }
+    }
+
+    // 获取当前栈顶页面的上一级页面名称 (供顶栏渲染 "[ ◀ 返回:上一页(Esc) ]")
+    std::string get_previous_page_name() const {
+        if (page_stack.size() >= 2) {
+            return page_stack[page_stack.size() - 2]->get_page_name();
+        }
+        return "";
     }
 
     bool OnEvent(ftxui::Event event) override {
@@ -1464,10 +1541,11 @@ public:
         bool handled = page_stack.back()->handle_event(event, action);
 
         switch (action.type) {
-            case PageAction::Type::None:   return handled; // 尊重子组件消费情况，不盲目吞噬事件
+            case PageAction::Type::None:   return handled;
             case PageAction::Type::Pop:    pop_page(); return true;
             case PageAction::Type::Push:   push_page(std::move(action.next_page)); return true;
             case PageAction::Type::Change: change_page(std::move(action.next_page)); return true;
+            case PageAction::Type::Reset:  reset_stack(std::move(action.next_page)); return true;
             case PageAction::Type::Quit:   screen.Exit(); return true;
         }
         return handled;
@@ -1488,18 +1566,18 @@ private:
 } // namespace ui
 ```
 
-### 10.4 页面规划清单 (`include/ui/pages/`)
-系统包含 7 个独立页面类，所有页面均继承自 `Page`：
+### 10.4 页面规划清单与各页面职责设计 (`include/ui/pages/`)
+系统包含 7 个独立页面类，所有页面均继承自 `Page`。统一采用黑白灰单线框终端美学、零 Emoji、左 Menu + 右操作面板的极简范式：
 
-| 页面类名 | 头文件路径 | 核心功能与交互 | 典型跳转动作 |
+| 页面类名 | 头文件路径 | 核心组件与布局 | 核心业务对接接口与交互逻辑 |
 | :--- | :--- | :--- | :--- |
-| **`LoginPage`** | `include/ui/pages/LoginPage.hpp` | 用户登录、新用户注册、管理员入口切换 | 登录成功 `Change` 至 `MallPage` 或 `AdminPage` |
-| **`MallPage`** | `include/ui/pages/MallPage.hpp` | 浏览商品列表、品类切换、调整数量加购 | 按 `C` `Push` 购物车；按 `U` `Push` 个人中心；按 `Q` `Push` 领券中心 |
-| **`CartPage`** | `include/ui/pages/CartPage.hpp` | 查看已选商品、加减数量、移出商品、清空 | 按 `Enter` `Push` 结算弹窗 `CheckoutPage`；按 `Esc` `Pop` 返回商城 |
-| **`CheckoutPage`** | `include/ui/pages/CheckoutPage.hpp` | 结算弹窗：自动显示推荐最优券与节省金额，可手动切换券，确认扣费支付 | 支付完成 `Pop` 两次返回商城；按 `Esc` `Pop` 取消结算 |
-| **`UserCenterPage`** | `include/ui/pages/UserCenterPage.hpp`| 仪表盘展示等级称号、成长进度条、余额充值模拟、账单流水历史 | 按 `Esc` `Pop` 返回上一页 |
-| **`CouponSquarePage`**| `include/ui/pages/CouponSquarePage.hpp`| 领券中心：公共池浏览、免费领券、付费购券 | 领券/购券成功后提示刷新；按 `Esc` `Pop` 返回 |
-| **`AdminPage`** | `include/ui/pages/AdminPage.hpp` | 运营后台：查看所有用户、调级、补库存、上架新商品、发新券 | 按 `Esc` `Change` 返回 `LoginPage` |
+| **`LoginPage`** | `include/ui/pages/LoginPage.hpp` | 居中单线卡片：`Input` x2 (用户名/密码) + 登录/注册/退出按钮组 | 对接 `UserManager::loginCustomer`、`loginAdmin`、`registerCustomer`；登录成功触发 `PageAction::reset` 重置历史栈进入 `MallPage` 或 `AdminPage`；提供快捷填充测试账号按钮。 |
+| **`MallPage`** | `include/ui/pages/MallPage.hpp` | 顶部导航 + 筛选栏 (`Toggle` 品类 + `Input` 搜索) + 左 `Menu` (商品货架) + 右详情面板 | 默认焦点固定在左侧商品列表；初始购物车为空；对接 `ProductManager::getProductsByCategory` / `searchByName`；右侧支持 `[ - ] 数量 [ + ]` 调整，按 Enter 加入购物车 (`Cart::addItem`)；提供查看购物车与领券中心快捷跳转。 |
+| **`CartPage`** | `include/ui/pages/CartPage.hpp` | 顶部导航 + 左 `Menu` (加购明细) + 右统计与操作面板 | 对接 `Cart::getItemslist`；右侧支持 `+1` / `-1` / 移除 / 清空 (`Cart::updateQuantity` / `removeItem` / `clear`)；实时展示各品类小计 (`Cart::getCategoryAmount`) 与原价总额；提供前往收银台 (`PageAction::push`)、去领券中心、继续选购快捷入口。 |
+| **`CheckoutPage`** | `include/ui/pages/CheckoutPage.hpp` | 全屏标准收银台：左 `Menu` (优惠券诊断列表) + 右平行让利账单明细 | 对接 `CouponPlanner::evaluateAndSortAllCoupons` 与 `computeManualPlan`；左侧第 0 项为自动推荐最优方案，第 1 项为不使用券，其后为背包各券诊断说明；右侧展示原价、会员让利、券折减、适用品类基数 (`applicable_amount`) 及缺额 (`shortfall_amount`)、实付总额；点击确认支付执行原子扣款、核销券、扣库存与升级判定；提供去充值、去领券、返回购物车快捷跳转。 |
+| **`CouponSquarePage`**| `include/ui/pages/CouponSquarePage.hpp`| 顶部导航 + 券池四档单选 (`Toggle`) + 左 `Menu` (券池列表) + 右四维约束详情卡 | 顶部四档筛选对接 `getPublicPool` / `getFreeCoupons` / `getPaidCoupons` / `getEligibleCouponsForUser`；提供 `[ 一键领取全部免费券 ]` (`claimAllFreeCoupons`)；单张申领/购买对接 `claimFreeCoupon` / `buyPaidCoupon`，执行同模板限持一张前置判重；列表直观标识 `[已拥有]`。 |
+| **`UserCenterPage`** | `include/ui/pages/UserCenterPage.hpp`| 顶部导航 + 成长仪表盘 (`gauge`) + 钱包充值 + 下方双栏 (左卡券包 + 右账单流水) | 顶部展示注册时间 (`Account::getCreatedAt`)、等级进度条与升级所需差额；充值支持快捷与自定义输入 (`CustomerAccount::recharge`)；卡券包支持三档切换 (`getCoupons` / `getAvailableCoupons` / `getUsedCoupons`) 与清理已核销券；账单流水多态调用 `TransactionRecord::getFormattedText`。 |
+| **`AdminPage`** | `include/ui/pages/AdminPage.hpp` | 顶部管理员身份栏 + 3 大 Tab 切换 (`Toggle`) + 左 `Menu` + 右表单与权限控制面板 | **Tab 1 商品管理**：对接 `ProductManager::replenishProduct`、`setStock`、`updatePrice`、`removeProduct`、`addProduct` (上架时支持品类单选)；<br>**Tab 2 发券管理**：对接 `CouponManager::registerCouponToPool` 与 `removeCouponFromPool`，表单完整支持满减/折扣/立减、适用品类、最低等级 V0~V5、时间限制四维配置；<br>**Tab 3 用户管理**：展示全量消费者，对接 `UserManager::updateCustomerTier` (超管强制调级) 与 `removeCustomer` (超管删除用户)，严格执行 RBAC 权限拦截。 |
 
 ---
 
@@ -1516,19 +1594,19 @@ sequenceDiagram
     participant CustAcc as 用户账户 (CustomerAccount)
     participant Persist as 持久化 (StorageManager)
 
-    Customer->>Cart: 发起结算请求 (Checkout)
+    Customer->>Cart: 从购物车点击「前往收银台算券结算」 (PageAction::push)
     Cart->>Planner: 传入 Cart、用户券列表、会员等级、系统星期
     activate Planner
     Planner->>Planner: 逐张评估 eligibility (品类/门槛/等级/周末)
     Planner->>Planner: 挑选省钱最多的最优券 computeOptimalPlan
-    Planner-->>Customer: 返回 PlanResult (原价, 会员省, 券省, 最终应付)
+    Planner-->>Customer: 在全屏 CheckoutPage 呈现 PlanResult (原价, 会员省, 券省, 最终应付)
     deactivate Planner
 
     Customer->>Cart: validateStockAvailable() 严格前置校验库存充足
     alt 库存不足
-        Cart-->>Customer: 提示库存不足，阻断支付
+        Cart-->>Customer: 状态栏提示库存不足，阻断支付
     else 库存充足
-        Customer->>CustAcc: 确认支付 final_pay_amount
+        Customer->>CustAcc: 点击确认支付 final_pay_amount
         activate CustAcc
         CustAcc->>CustAcc: deductBalance (扣减余额, 累加总消费)
         CustAcc->>CustAcc: 将选用的优惠券 markAsUsed()
@@ -1536,9 +1614,9 @@ sequenceDiagram
         CustAcc->>CustAcc: checkAndPerformUpgrade() 自动判定是否晋升
         alt 满足升级条件 (如消费满 800 跃迁至 V2)
             CustAcc->>CustAcc: tier = V2_SILVER, 记录 UpgradeRecord 流水
-            CustAcc-->>Customer: 支付成功并在弹窗提示「恭喜升至白银会员！」
+            CustAcc-->>Customer: 状态栏提示「支付成功，恭喜升至白银会员！」
         else 未达到门槛
-            CustAcc-->>Customer: 支付成功提示
+            CustAcc-->>Customer: 状态栏提示「支付成功」
         end
         deactivate CustAcc
 

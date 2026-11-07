@@ -35,8 +35,11 @@ public:
     //事务编排
     core::Result claimFreeCoupon(const std::string& template_id,user::CustomerAccount& customer);
     core::Result buyPaidCoupon(const std::string& template_id, user::CustomerAccount& customer);
+    core::Result claimAllFreeCoupons(user::CustomerAccount& customer);
 
     //检索与视图
+    bool hasUserHeldCoupon(const user::CustomerAccount& customer, const std::string& template_id) const;
+
     std::shared_ptr<Coupon> findCouponInPool(const std::string& template_id) const;
     const std::vector<std::shared_ptr<Coupon>>& getPublicPool() const { return public_pool; }
     std::vector<std::shared_ptr<Coupon>> getFreeCoupons() const;

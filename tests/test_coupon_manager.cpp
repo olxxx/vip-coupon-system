@@ -125,6 +125,22 @@ int main()
         assert(cpn->getInstanceId() == "INST_1001");
         assert(!cpn->isUsed());
 
+        assert(cpn_mgr.hasUserHeldCoupon(normal_user, "TPL_FREE_10"));
+        // 重复领取同模板免费券应被拦截
+        auto res_dup = cpn_mgr.claimFreeCoupon("TPL_FREE_10", normal_user);
+        assert(!res_dup.success);
+        assert(normal_user.getCouponCount() == 1);
+
+        // 一键申领全部免费券 (此时用户已拥有，应返回无新券可领)
+        auto res_all_none = cpn_mgr.claimAllFreeCoupons(normal_user);
+        assert(!res_all_none.success);
+
+        // 新用户一键申领测试
+        user::CustomerAccount fresh_user("david", "pass", "2026-11-05", 100.0);
+        auto res_all_ok = cpn_mgr.claimAllFreeCoupons(fresh_user);
+        assert(res_all_ok.success);
+        assert(fresh_user.getCouponCount() == 1);
+
         std::cout << "[PASS] 4. 免费领券事务与实例自增测试通过" << std::endl;
     }
 
@@ -152,6 +168,12 @@ int main()
         assert(isClose(poor_vip.getBalance(), 90.0)); // 110 - 20 = 90
         assert(poor_vip.getCoupons()[0]->getInstanceId() == "INST_1002");
         assert(poor_vip.getTransactionCount() >= 2); // 充值 + 购券流水
+
+        assert(cpn_mgr.hasUserHeldCoupon(poor_vip, "TPL_PAID_DIGITAL"));
+        // 重复购买同模板付费券应被拦截
+        auto res_dup_paid = cpn_mgr.buyPaidCoupon("TPL_PAID_DIGITAL", poor_vip);
+        assert(!res_dup_paid.success);
+        assert(poor_vip.getCouponCount() == 1);
 
         std::cout << "[PASS] 5. 付费购券扣款、等级门槛与流水生成测试通过" << std::endl;
     }

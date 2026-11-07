@@ -55,6 +55,9 @@ core::Result CouponManager::claimFreeCoupon(const std::string &template_id, user
     if (customer.getTier() < coupon->getMinTier())
         return core::Result::fail("会员等级未达到该优惠券的领取门槛");
 
+    if (hasUserHeldCoupon(customer, template_id))
+        return core::Result::fail("您已持有该优惠券，不可重复领取");
+
     std::string instance_id = generateNextInstanceId();
     auto instance_coupon = coupon->cloneInstance(instance_id);
     customer.addCoupon(std::move(instance_coupon));
@@ -73,6 +76,9 @@ core::Result CouponManager::buyPaidCoupon(const std::string &template_id, user::
     if (customer.getTier() < coupon->getMinTier())
         return core::Result::fail("会员等级未达到该优惠券的购买门槛");
 
+    if (hasUserHeldCoupon(customer, template_id))
+        return core::Result::fail("您已持有该优惠券，不可重复购买");
+
     // 扣减余额并记录流水
     if (!customer.deductForCoupon(coupon->getCost(), coupon->getName(), coupon->getTemplateId()))
         return core::Result::fail("账户余额不足，购券失败");
@@ -81,6 +87,39 @@ core::Result CouponManager::buyPaidCoupon(const std::string &template_id, user::
     auto instance_coupon = coupon->cloneInstance(instance_id);
     customer.addCoupon(std::move(instance_coupon));
     return core::Result::ok("优惠券购买成功");
+}
+
+core::Result CouponManager::claimAllFreeCoupons(user::CustomerAccount &customer)
+{
+    int claimed_count = 0;
+    for (const auto& coupon : public_pool)
+    {
+        if (coupon && coupon->isFree() && customer.getTier() >= coupon->getMinTier())
+        {
+            if (!hasUserHeldCoupon(customer, coupon->getTemplateId()))
+            {
+                std::string instance_id = generateNextInstanceId();
+                auto instance_coupon = coupon->cloneInstance(instance_id);
+                customer.addCoupon(std::move(instance_coupon));
+                ++claimed_count;
+            }
+        }
+    }
+    if (claimed_count > 0)
+    {
+        return core::Result::ok("成功领取 " + std::to_string(claimed_count) + " 张免费优惠券");
+    }
+    return core::Result::fail("当前没有可新领取的免费优惠券");
+}
+
+bool CouponManager::hasUserHeldCoupon(const user::CustomerAccount &customer, const std::string &template_id) const
+{
+    for (const auto& coupon : customer.getCoupons())
+    {
+        if (coupon && !coupon->isUsed() && coupon->getTemplateId() == template_id)
+            return true;
+    }
+    return false;
 }
 
 std::shared_ptr<Coupon> CouponManager::findCouponInPool(const std::string &template_id) const
