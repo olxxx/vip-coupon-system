@@ -1,0 +1,212 @@
+#include "ui/AppContext.hpp"
+#include "ui/PageManager.hpp"
+#include "ui/pages/LoginPage.hpp"
+#include "ui/pages/MallPage.hpp"
+#include "ui/pages/CartPage.hpp"
+#include "ui/pages/CheckoutPage.hpp"
+#include "ui/pages/CouponSquarePage.hpp"
+#include "ui/pages/UserCenterPage.hpp"
+#include "ui/pages/AdminPage.hpp"
+
+#include <ftxui/dom/node.hpp>
+#include <ftxui/screen/screen.hpp>
+
+#include <cassert>
+#include <filesystem>
+#include <iostream>
+#include <memory>
+#include <string>
+
+namespace {
+
+// 辅助函数：将当前页面在 120x36 离屏画布中渲染为纯文本，验证无崩溃且关键文案存在
+std::string render_to_text(ui::PageManager& mgr) {
+    auto screen = ftxui::Screen::Create(ftxui::Dimension::Fixed(120), ftxui::Dimension::Fixed(36));
+    ftxui::Render(screen, mgr.Render());
+    return screen.ToString();
+}
+
+} // namespace
+
+int main() {
+    std::cout << "========================================" << std::endl;
+    std::cout << "[Test Suite] FTXUI 终端交互与页面栈集成测试" << std::endl;
+    std::cout << "========================================" << std::endl;
+
+    namespace fs = std::filesystem;
+    const fs::path test_dir = "build/test_ui_data";
+    if (fs::exists(test_dir)) {
+        fs::remove_all(test_dir);
+    }
+
+    user::UserManager user_mgr;
+    shop::ProductManager prod_mgr;
+    shop::CouponManager cpn_mgr;
+    shop::Cart cart;
+    persist::StorageManager storage_mgr(test_dir);
+
+    storage_mgr.initializeDataDirIfEmpty(user_mgr, prod_mgr, cpn_mgr);
+    ui::AppContext ctx(user_mgr, prod_mgr, cpn_mgr, cart, storage_mgr);
+
+    // 1. 验证增强种子数据 (demo 初始流水 + alice V2 白银会员)
+    {
+        auto demo = user_mgr.findCustomer("demo");
+        assert(demo != nullptr);
+        assert(!demo->getTransactions().empty());
+
+        auto alice = user_mgr.findCustomer("alice");
+        assert(alice != nullptr);
+        assert(alice->getTier() == core::UserTier::V2_SILVER);
+        assert(alice->getBalance() == 1200.0);
+        assert(alice->getTotalSpent() == 950.0);
+        assert(alice->hasCoupon("INST_1000"));
+        assert(alice->getTransactions().size() >= 2);
+        std::cout << "[PASS] 1. 种子数据验证通过 (demo 初始流水 & alice V2 白银会员)" << std::endl;
+    }
+
+    bool exited = false;
+    auto mgr = ftxui::Make<ui::PageManager>(ctx, [&exited]() { exited = true; });
+
+    // 2. 验证 PageManager 固定深度页面栈 (MAX_STACK_DEPTH = 8) 与生命周期
+    {
+        mgr->reset_stack(std::make_unique<ui::LoginPage>(ctx));
+        assert(mgr->get_stack_depth() == 1);
+        assert(mgr->get_current_page_name() == "系统登录");
+
+        auto login_text = render_to_text(*mgr);
+        assert(login_text.find("用户权益管理与优惠规划系统") != std::string::npos);
+        assert(login_text.find("alice (白银会员)") != std::string::npos);
+
+        // 先登录 demo 测试页面栈操作
+        assert(ctx.loginCustomer("demo", "123456").success);
+        mgr->reset_stack(std::make_unique<ui::MallPage>(ctx));
+        assert(mgr->get_stack_depth() == 1);
+        assert(mgr->get_current_page_name() == "商城货架");
+
+        // 同名页面重复压栈应被忽略
+        mgr->push_page(std::make_unique<ui::MallPage>(ctx));
+        assert(mgr->get_stack_depth() == 1);
+
+        // 连续交叉压栈超过 MAX_STACK_DEPTH (8)，验证栈深严格受限于 8
+        for (int i = 0; i < 12; ++i) {
+            if (i % 2 == 0) {
+                mgr->push_page(std::make_unique<ui::CartPage>(ctx));
+            } else {
+                mgr->push_page(std::make_unique<ui::CouponSquarePage>(ctx));
+            }
+        }
+        assert(mgr->get_stack_depth() == ui::PageManager::MAX_STACK_DEPTH);
+        std::cout << "[PASS] 2. PageManager 固定深度栈 (MAX_STACK_DEPTH=8) 淘汰与防重机制验证通过" << std::endl;
+    }
+
+    // 3. 验证消费者完整购物、领券、凑单试算、支付与个人中心交互链路
+    {
+        mgr->reset_stack(std::make_unique<ui::MallPage>(ctx));
+        auto mall_text = render_to_text(*mgr);
+        assert(mall_text.find("demo") != std::string::npos);
+        assert(mall_text.find("机械键盘") != std::string::npos);
+
+        // 在商城货架按 '+' 增加数量，按 Enter 加入购物车 (P1001 无线机械键盘 299.0 * 2 = 598.0)
+        mgr->OnEvent(ftxui::Event::Character('+'));
+        mgr->OnEvent(ftxui::Event::Return);
+        assert(ctx.cart.getItemQuantity("P1001") == 2);
+
+        // 按快捷键 '3' 推入领券中心，按 'A' 一键领取全部免费券
+        mgr->OnEvent(ftxui::Event::Character('3'));
+        assert(mgr->get_current_page_name() == "领券中心");
+        auto square_text = render_to_text(*mgr);
+        assert(square_text.find("一键领取全部免费券") != std::string::npos);
+        mgr->OnEvent(ftxui::Event::Character('A'));
+        assert(ctx.user_mgr.getCurrentCustomer()->getCouponCount() >= 1);
+
+        // 按快捷键 '2' 推入购物车页，验证渲染与分品类统计
+        mgr->OnEvent(ftxui::Event::Character('2'));
+        assert(mgr->get_current_page_name() == "购物车");
+        auto cart_text = render_to_text(*mgr);
+        assert(cart_text.find("机械键盘") != std::string::npos);
+        assert(cart_text.find("分品类金额统计") != std::string::npos);
+
+        // 在购物车列表按 Enter 进入收银台
+        mgr->OnEvent(ftxui::Event::Return);
+        assert(mgr->get_current_page_name() == "收银台");
+        auto checkout_text = render_to_text(*mgr);
+        assert(checkout_text.find("最优推荐") != std::string::npos);
+        assert(checkout_text.find("四维诊断") != std::string::npos);
+
+        // 按 'T' 切换周末模拟环境
+        bool prev_weekend = ctx.isWeekend();
+        mgr->OnEvent(ftxui::Event::Character('T'));
+        assert(ctx.isWeekend() == !prev_weekend);
+
+        // 在收银台方案列表按 Enter 确认支付并扣款
+        double before_balance = ctx.user_mgr.getCurrentCustomer()->getBalance();
+        mgr->OnEvent(ftxui::Event::Return);
+        assert(ctx.cart.empty());
+        assert(ctx.user_mgr.getCurrentCustomer()->getBalance() < before_balance);
+        assert(ctx.user_mgr.getCurrentCustomer()->getTotalSpent() >= 500.0);
+        // 消费满 500 应触发 V1 青铜会员自动升级
+        assert(ctx.user_mgr.getCurrentCustomer()->getTier() >= core::UserTier::V1_BRONZE);
+
+        auto receipt_text = render_to_text(*mgr);
+        assert(receipt_text.find("订单支付已完成") != std::string::npos);
+
+        // 按快捷键 '4' 进入个人中心验证流水与充值
+        mgr->OnEvent(ftxui::Event::Character('4'));
+        assert(mgr->get_current_page_name() == "个人中心");
+        auto uc_text = render_to_text(*mgr);
+        assert(uc_text.find("个人中心") != std::string::npos);
+
+        double bal_before_recharge = ctx.user_mgr.getCurrentCustomer()->getBalance();
+        assert(ctx.recharge(100.0).success);
+        assert(ctx.user_mgr.getCurrentCustomer()->getBalance() == bal_before_recharge + 100.0);
+        assert(ctx.cleanUsedCoupons().success);
+
+        std::cout << "[PASS] 3. 消费者加购 -> 领券 -> 智能收银台 -> 自动晋级 -> 个人中心全链路通过" << std::endl;
+    }
+
+    // 4. 验证管理后台 3 大子页签渲染与 RBAC 权限拦截
+    {
+        ctx.logout();
+        assert(ctx.loginAdmin("staff", "staff123").success);
+        mgr->reset_stack(std::make_unique<ui::AdminPage>(ctx));
+        assert(mgr->get_current_page_name() == "后台运营控制台");
+
+        for (char tab_key : {'1', '2', '3'}) {
+            mgr->OnEvent(ftxui::Event::Character(tab_key));
+            auto admin_text = render_to_text(*mgr);
+            assert(admin_text.find("后台运营控制台") != std::string::npos);
+        }
+
+        // 在用户等级管理页签校验 staff 只读权限展示与 RBAC 拦截
+        auto user_tab_text = render_to_text(*mgr);
+        assert(user_tab_text.find("仅只读查看") != std::string::npos);
+        assert(!ctx.updateCustomerTier("demo", core::UserTier::V5_SUPREME).success);
+        assert(!ctx.resetSystem().success);
+
+        // 切换为 root 超级管理员验证完整权限
+        ctx.logout();
+        assert(ctx.loginAdmin("root", "admin123").success);
+        mgr->reset_stack(std::make_unique<ui::AdminPage>(ctx));
+        mgr->OnEvent(ftxui::Event::Character('3'));
+        auto root_tab_text = render_to_text(*mgr);
+        assert(root_tab_text.find("允许调级/删号") != std::string::npos);
+        assert(ctx.updateCustomerTier("demo", core::UserTier::V3_GOLD).success);
+
+        // 在后台栈底按 Esc 应登出并回到系统登录页，再按 Esc 触发退出回调
+        mgr->OnEvent(ftxui::Event::Escape);
+        assert(mgr->get_current_page_name() == "系统登录");
+        mgr->OnEvent(ftxui::Event::Escape);
+        assert(exited);
+
+        std::cout << "[PASS] 4. 管理后台 3 大模块渲染、RBAC 权限分级与 Esc 退出闭环验证通过" << std::endl;
+    }
+
+    if (fs::exists(test_dir)) {
+        fs::remove_all(test_dir);
+    }
+
+    std::cout << "========================================" << std::endl;
+    std::cout << "所有 FTXUI 终端交互集成测试 100% 通过！" << std::endl;
+    std::cout << "========================================" << std::endl;
+    return 0;
+}

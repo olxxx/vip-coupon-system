@@ -205,7 +205,30 @@ void StorageManager::seedDefaultData(user::UserManager& user_mgr,
     auto demo_user = std::make_shared<user::CustomerAccount>(
         "demo", "123456", core::getCurrentTimestamp(), 2000.0
     );
+    demo_user->addTransaction(std::make_unique<user::RechargeRecord>(
+        user::TransactionRecord::generateId("RECHARGE"),
+        core::getCurrentTimestamp(),
+        2000.0,
+        "系统初始资金"
+    ));
     user_mgr.loadCustomerDirect(demo_user);
+
+    // 预设白银会员消费者 alice：余额 1200.0，累计消费 950.0，等级 V2_SILVER
+    auto alice_user = std::make_shared<user::CustomerAccount>(
+        "alice", "123456", "2026-10-25 14:00:00", 1200.0, 950.0, core::UserTier::V2_SILVER
+    );
+    alice_user->addCoupon(std::make_shared<shop::ThresholdCoupon>(
+        "TPL_THRESHOLD_200_30", "全场畅选满200减30", 0.0, 200.0,
+        core::ProductCategory::ALL, core::UserTier::V0_NORMAL,
+        core::TimeConstraint::ANYTIME, 30.0, "INST_1000"
+    ));
+    alice_user->addTransaction(std::make_unique<user::ExpenseRecord>(
+        "EXPENSE_INIT_999", "2026-11-05 14:20:00", 950.0, "ORD_999", "购买商品结算"
+    ));
+    alice_user->addTransaction(std::make_unique<user::UpgradeRecord>(
+        "UPGRADE_INIT_999", "2026-11-05 14:20:00", "普通会员", "白银会员"
+    ));
+    user_mgr.loadCustomerDirect(alice_user);
 
     // B. 注入典型商品库 (覆盖品类、高低库存与售罄)
     prod_mgr.addProduct("P1001", "机械键盘", core::ProductCategory::DIGITAL, 399.0, 50);
