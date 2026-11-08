@@ -19,14 +19,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_SOURCE_DIR}/bin")
 # ---------------------------------------------------------------------------
 include(FetchContent)
 
-# 1. nlohmann/json 依赖 (最新版本 v3.12.0)
+# 1. nlohmann/json 依赖 (v3.12.0)
 FetchContent_Declare(
     json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
     GIT_TAG        v3.12.0
 )
 
-# 2. ftxui 终端 UI 库依赖 (最新版本 v7.0.3)
+# 2. ftxui 终端 UI 库依赖 (v7.0.3)
 FetchContent_Declare(
     ftxui
     GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
@@ -37,14 +37,51 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json ftxui)
 
 # ---------------------------------------------------------------------------
-#  Sources & Target Definition
+#  Sources & Target Definition (显式列出所有源文件)
 # ---------------------------------------------------------------------------
-# 自动递归检索 src 下所有 .cpp 文件，且当目录增删文件时自动触发重新配置
-file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+# 核心业务逻辑与 TUI 终端层源文件清单
+set(CORE_SRC_FILES
+    # 1. 用户权益与 RBAC 权限管理模块
+    src/user/AdminAccount.cpp
+    src/user/CustomerAccount.cpp
+    src/user/TransactionRecord.cpp
+    src/user/UserManager.cpp
+
+    # 2. 商品货架与购物车管理模块
+    src/shop/Cart.cpp
+    src/shop/Product.cpp
+    src/shop/ProductManager.cpp
+
+    # 3. 多态优惠券与平行让利规划引擎模块
+    src/coupon/ConcreteCoupons.cpp
+    src/coupon/CouponManager.cpp
+    src/coupon/CouponPlanner.cpp
+
+    # 4. 数据持久化与冷启动仓储模块
+    src/persist/JsonFactories.cpp
+    src/persist/StorageManager.cpp
+
+    # 5. FTXUI 终端状态机、主题与基础控件
+    src/ui/AppContext.cpp
+    src/ui/Page.cpp
+    src/ui/PageManager.cpp
+    src/ui/Theme.cpp
+
+    # 6. FTXUI 7 大业务全屏页面
+    src/ui/pages/AdminPage.cpp
+    src/ui/pages/CartPage.cpp
+    src/ui/pages/CheckoutPage.cpp
+    src/ui/pages/CouponSquarePage.cpp
+    src/ui/pages/LoginPage.cpp
+    src/ui/pages/MallPage.cpp
+    src/ui/pages/UserCenterPage.cpp
 )
 
-add_executable(vip-coupon-system ${SRC_FILES})
+# 主可执行文件目标
+add_executable(vip-coupon-system
+    src/main.cpp
+    ${CORE_SRC_FILES}
+)
 
 # ---------------------------------------------------------------------------
 #  Target Properties & Compilation Features
@@ -98,42 +135,46 @@ add_custom_target(run
 # ---------------------------------------------------------------------------
 enable_testing()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-    file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "tests/*.cpp")
+set(TEST_SOURCES
+    tests/test_cart.cpp
+    tests/test_concrete_coupons.cpp
+    tests/test_coupon_manager.cpp
+    tests/test_coupon_planner.cpp
+    tests/test_product.cpp
+    tests/test_product_manager.cpp
+    tests/test_storage_manager.cpp
+    tests/test_ui_integration.cpp
+    tests/test_user_module.cpp
+)
 
-    # 提取除 src/main.cpp 之外的核心业务源文件 (用于测试程序链接)
-    set(CORE_SRC_FILES ${SRC_FILES})
-    list(FILTER CORE_SRC_FILES EXCLUDE REGEX ".*main\\.cpp$")
+foreach(TEST_SRC ${TEST_SOURCES})
+    get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
 
-    foreach(TEST_SRC ${TEST_SOURCES})
-        get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
+    add_executable(${TEST_NAME} ${TEST_SRC} ${CORE_SRC_FILES})
+    target_compile_features(${TEST_NAME} PRIVATE cxx_std_17)
+    target_include_directories(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-        add_executable(${TEST_NAME} ${TEST_SRC} ${CORE_SRC_FILES})
-        target_compile_features(${TEST_NAME} PRIVATE cxx_std_17)
-        target_include_directories(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    if(MSVC)
+        target_compile_options(${TEST_NAME} PRIVATE /W4 /utf-8 /permissive- /U_NDEBUG /UNDEBUG)
+    else()
+        target_compile_options(${TEST_NAME} PRIVATE -Wall -Wextra -UNDEBUG)
+    endif()
+    target_compile_definitions(${TEST_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 
-        if(MSVC)
-            target_compile_options(${TEST_NAME} PRIVATE /W4 /utf-8 /permissive-)
-        else()
-            target_compile_options(${TEST_NAME} PRIVATE -Wall -Wextra)
-        endif()
-        target_compile_definitions(${TEST_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(${TEST_NAME} PRIVATE
+        nlohmann_json::nlohmann_json
+        ftxui::screen
+        ftxui::dom
+        ftxui::component
+    )
 
-        target_link_libraries(${TEST_NAME} PRIVATE
-            nlohmann_json::nlohmann_json
-            ftxui::screen
-            ftxui::dom
-            ftxui::component
-        )
+    # 测试产出二进制隔离存放在 build/bin/tests 目录
+    set_target_properties(${TEST_NAME} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/tests"
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/tests"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/tests"
+    )
 
-        # 测试产出二进制隔离存放在 build/bin/tests 目录
-        set_target_properties(${TEST_NAME} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/tests"
-            RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/tests"
-            RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/tests"
-        )
-
-        # 注册至 CTest 自动化测试套件
-        add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
-    endforeach()
-endif()
+    # 注册至 CTest 自动化测试套件
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+endforeach()

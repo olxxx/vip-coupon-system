@@ -1,5 +1,26 @@
 #ifdef _WIN32
 #include <windows.h>
+
+// 激活 Windows 终端 UTF-8 与虚拟终端转义序列 (VT Mode)
+namespace {
+
+void InitWindowsConsole() {
+    // 1. 设置控制台输入输出代码页为 UTF-8，防止中文与制表符乱码
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+    // 2. 显式激活 Windows 虚拟终端转义序列 (VT Mode)，防止 ANSI 颜色代码作为乱码字面量打印
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+}
+
+} // namespace
 #endif
 
 #include "ui/AppContext.hpp"
@@ -11,9 +32,7 @@
 
 int main() {
 #ifdef _WIN32
-    // 强制控制台输入输出编码为 UTF-8，确保中文与 Box-Drawing 字符正常渲染
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
+    InitWindowsConsole();
 #endif
 
     // 1. 初始化核心业务管理器与持久化引擎
