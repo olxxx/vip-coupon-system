@@ -54,33 +54,35 @@ CouponSquarePage::CouponSquarePage(AppContext& context)
                 text(c->getRuleDescription()) | color(Color::GrayLight)
             });
         },
-        [this] { handleAcquireSelected(); },
+        {},
         "该筛选条件下暂无优惠券模板");
 
-    acquire_btn_ = Button([this]() -> ButtonOption {
-        ButtonOption opt;
-        opt.on_click = [this] { handleAcquireSelected(); };
-        opt.transform = [this](const EntryState& st) -> Element {
-            std::string lbl = " [ 免费申领该优惠券 (Enter) ] ";
+    acquire_btn_ = StyledButton(
+        [this] {
+            std::string lbl = "免费申领该优惠券";
             if (!filtered_pool_.empty() && selected_idx_ >= 0 &&
                 selected_idx_ < static_cast<int>(filtered_pool_.size())) {
                 const auto& c = filtered_pool_[static_cast<std::size_t>(selected_idx_)];
                 const auto cust = ctx.user_mgr.getCurrentCustomer();
                 const bool owned = cust && ctx.cpn_mgr.hasUserHeldCoupon(*cust, c->getTemplateId());
                 if (owned) {
-                    lbl = " [ 已拥有该券 (不可重复获取) ] ";
+                    lbl = "已拥有该券 (不可重复获取)";
                 } else if (!c->isFree()) {
-                    lbl = " [ 支付 " + money(c->getCost()) + " 购买该券 (Enter) ] ";
+                    lbl = "支付 " + money(c->getCost()) + " 购买该券";
                 }
             }
-            Element el = text(lbl) | bold;
-            if (st.focused) {
-                return std::move(el) | color(Color::Black) | bgcolor(theme::Accent);
+            return lbl;
+        },
+        [this] { handleAcquireSelected(); },
+        [this] {
+            if (!filtered_pool_.empty() && selected_idx_ >= 0 &&
+                selected_idx_ < static_cast<int>(filtered_pool_.size())) {
+                const auto& c = filtered_pool_[static_cast<std::size_t>(selected_idx_)];
+                const auto cust = ctx.user_mgr.getCurrentCustomer();
+                if (cust && ctx.cpn_mgr.hasUserHeldCoupon(*cust, c->getTemplateId())) return ButtonKind::Disabled;
             }
-            return std::move(el) | color(theme::Accent);
-        };
-        return opt;
-    }());
+            return ButtonKind::Primary;
+        });
 
     go_wallet_btn_ = ActionButton("查看我的券包", [this] {
         pending_action = PageAction::push(std::make_unique<UserCenterPage>(ctx));
@@ -247,7 +249,7 @@ Element CouponSquarePage::render() {
     return renderCustomerFrame(
         nav_bar_,
         std::move(body),
-        "↑/↓ 选择优惠券 | Enter 领取/购买 | A 一键领免费券 | Esc 返回上一页");
+        "↑/↓ 移动光标 | Enter 选中 | Tab 到领取按钮 | A 一键领免费券 | Esc 返回上一页");
 }
 
 } // namespace ui

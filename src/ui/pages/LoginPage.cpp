@@ -62,7 +62,7 @@ LoginPage::LoginPage(AppContext& context)
             filler(),
             std::move(card),
             filler(),
-            renderFooterBar("Tab/方向键 切换控件 | Enter 确认登录 | Esc 退出系统")
+            renderFooterBar("Tab/方向键 切换控件 | Enter 确认登录 | Esc 退出输入/退出系统")
         });
     });
 }

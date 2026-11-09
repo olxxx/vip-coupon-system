@@ -26,27 +26,21 @@ AdminPage::AdminPage(AppContext& context)
 
     // 1. 顶部栏按钮
     auto make_tab_btn = [this](const std::string& label, int target_tab) {
-        ButtonOption opt;
-        opt.on_click = [this, target_tab] {
-            tab_ = target_tab;
-            reset_armed_ = false;
-            syncData();
-        };
-        opt.transform = [this, label, target_tab](const EntryState& st) -> Element {
-            Element el = text(" [ " + label + " ] ");
-            if (st.focused) return std::move(el) | bold | color(Color::Black) | bgcolor(Color::White);
-            if (tab_ == target_tab) return std::move(el) | bold | color(Color::White) | bgcolor(theme::RowSelectBg);
-            return std::move(el) | color(Color::GrayLight);
-        };
-        return Button(opt);
+        return StyledButton(
+            [label] { return label; },
+            [this, target_tab] {
+                tab_ = target_tab;
+                reset_armed_ = false;
+                syncData();
+            },
+            [this, target_tab] { return tab_ == target_tab ? ButtonKind::TabActive : ButtonKind::Tab; });
     };
 
     auto tab0_btn = make_tab_btn("1.商品与库存管理", 0);
     auto tab1_btn = make_tab_btn("2.优惠券池发行", 1);
     auto tab2_btn = make_tab_btn("3.用户等级管理(RBAC)", 2);
 
-    ButtonOption reset_opt;
-    reset_opt.on_click = [this] {
+    auto reset_click = [this] {
         const auto cur_adm = ctx.user_mgr.getCurrentAdmin();
         if (!cur_adm || !cur_adm->canResetSystem()) {
             notify(ctx.resetSystem());
@@ -54,7 +48,7 @@ AdminPage::AdminPage(AppContext& context)
         }
         if (!reset_armed_) {
             reset_armed_ = true;
-            setStatus("请再点击一次 [ 确认重置系统 ] 将全部数据恢复为初始演示数据！", false);
+            setStatus("请再点击一次「确认重置系统」 将全部数据恢复为初始演示数据！", false);
             return;
         }
         reset_armed_ = false;
@@ -64,14 +58,10 @@ AdminPage::AdminPage(AppContext& context)
             pending_action = PageAction::reset(std::make_unique<LoginPage>(ctx));
         }
     };
-    reset_opt.transform = [this](const EntryState& st) -> Element {
-        const std::string lbl = reset_armed_ ? " [ ! 再次点击确认重置 ! ] " : " [ 重置系统默认数据 ] ";
-        Element el = text(lbl);
-        if (st.focused) return std::move(el) | bold | color(Color::Black) | bgcolor(reset_armed_ ? theme::Bad : Color::White);
-        if (reset_armed_) return std::move(el) | bold | color(theme::Bad);
-        return std::move(el) | color(Color::GrayLight);
-    };
-    auto reset_btn = Button(reset_opt);
+    auto reset_btn = StyledButton(
+        [this] { return std::string(reset_armed_ ? "! 再次点击确认重置 !" : "重置系统默认数据"); },
+        reset_click,
+        [this] { return reset_armed_ ? ButtonKind::Danger : ButtonKind::Secondary; });
 
     auto logout_btn = ActionButton("退出后台(Esc)", [this] {
         ctx.logout();

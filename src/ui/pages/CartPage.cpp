@@ -10,7 +10,7 @@ namespace ui {
 using namespace ftxui;
 
 CartPage::CartPage(AppContext& context)
-    : Page(context, "可在此调整商品数量 (+/-)，或按 Enter 进入收银台算券结算。") {
+    : Page(context, "可在此调整商品数量 (+/-)，或点击「前往收银台」算券结算。") {
     nav_bar_ = buildCustomerNavBar(2);
 
     cart_list_ = DataList(
@@ -28,14 +28,14 @@ CartPage::CartPage(AppContext& context)
                 text(money(it.getSubtotal())) | bold | color(theme::Good)
             });
         },
-        [this] { enterCheckout(); },
-        "购物车当前为空。请点击右侧 [ 继续选购商品 ] 或按 Esc 返回商城。");
+        {},
+        "购物车当前为空。请点击右侧「继续选购商品」 或按 Esc 返回商城。");
 
     inc_btn_      = ActionButton("数量 +1", [this] { modifySelectedQty(1); });
     dec_btn_      = ActionButton("数量 -1", [this] { modifySelectedQty(-1); });
     remove_btn_   = ActionButton("移除该项", [this] { removeSelected(); });
     clear_btn_    = ActionButton("清空全部", [this] { clearAll(); });
-    checkout_btn_ = ActionButton("前往收银台算券结算 (Enter)", [this] { enterCheckout(); }, true);
+    checkout_btn_ = ActionButton("前往收银台算券结算", [this] { enterCheckout(); }, true);
     go_coupon_btn_ = ActionButton("去领券中心", [this] {
         pending_action = PageAction::push(std::make_unique<CouponSquarePage>(ctx));
     });
@@ -219,7 +219,7 @@ Element CartPage::render() {
     return renderCustomerFrame(
         nav_bar_,
         hbox({std::move(left_box) | flex, std::move(right_box)}),
-        "↑/↓ 选择条目 | +/- 增减数量 | Del 移除 | Enter 进入收银台 | Esc 返回");
+        "↑/↓ 选择条目 | +/- 增减数量 | Del 移除 | Enter 选中 | Tab 进入操作区 | Esc 返回");
 }
 
 } // namespace ui

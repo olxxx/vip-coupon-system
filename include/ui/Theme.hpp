@@ -23,6 +23,8 @@ inline const ftxui::Color Muted       = ftxui::Color::RGB(113, 113, 122); // #71
 inline const ftxui::Color RowSelectBg = ftxui::Color::RGB(12, 74, 110);   // #0C4A6E 聚焦选中行深蓝底色
 inline const ftxui::Color RowHoverBg  = ftxui::Color::RGB(30, 41, 59);    // #1E293B 失焦选中行暗灰蓝底色
 inline const ftxui::Color BadgeBg     = ftxui::Color::RGB(24, 24, 27);    // #18181B 按钮常规底色
+inline const ftxui::Color CursorBg    = ftxui::Color::RGB(51, 65, 85);    // #334155 光标/鼠标悬停行与控件底色
+inline const ftxui::Color SelectCursorBg = ftxui::Color::RGB(14, 105, 160); // #0E69A0 选中行同时被光标/悬停覆盖时的底色
 } // namespace theme
 
 // --- 视觉排版原语 ---
@@ -44,28 +46,51 @@ ftxui::Element kv(const std::string& key, const std::string& value);
 ftxui::Component PassTab(ftxui::Component child);
 
 // 紧凑型单选切换栏 (如: (•)全部  ( )数码3C ...)
+// 光标/选中两步模型：←/→ 与鼠标悬停移动光标（仅高亮），Enter/空格/单击才写入 *selected。
 ftxui::Component InlineToggle(const std::vector<std::string>* labels,
                               int* selected,
                               std::function<void()> on_change = {});
 
-// 终端风格按钮: [ 文本 ]，聚焦或悬停时高亮反色
+// 按钮语义类型
+enum class ButtonKind {
+    Primary,    // 主操作：强调色文字
+    Secondary,  // 次要操作：灰色文字
+    Danger,     // 危险操作：红色
+    Link,       // 页面跳转类：强调色文字，焦点反白
+    Tab,        // 页签（未激活）
+    TabActive,  // 页签（当前页）
+    Disabled    // 不可用外观（仍会触发 on_click，由页面给出提示）
+};
+
+// 无括号色块按钮。三态样式：
+//   常态：仅着色文字； 鼠标悬停：淡底色 + 下划线（不改变焦点）；
+//   键盘焦点：实心高亮底 + 黑色加粗字。
+// 鼠标仅在左键按下时获取焦点，移动不会抢走其他控件（如输入框）的焦点。
+ftxui::Component StyledButton(std::function<std::string()> label,
+                              std::function<void()> on_click,
+                              std::function<ButtonKind()> kind);
+
+// 静态文案按钮（is_primary 为 true 使用 Primary，否则 Secondary）
 ftxui::Component ActionButton(const std::string& label,
                               std::function<void()> on_click,
                               bool is_primary = false);
 
-// 单行输入框（自动带底框与聚焦变色）
+// 单行输入框（常态暗底、悬停淡底、聚焦深蓝底）。
+// 聚焦时按 Esc 先退出输入，焦点移到页面内第一个非输入控件（Esc 被消费，不会返回上一页）。
 ftxui::Component TextInput(std::string* value,
                            const std::string& placeholder = "",
                            bool is_password = false,
                            std::function<void()> on_enter = {},
                            std::function<void()> on_change = {});
 
-// 自适应多列对齐列表组件：
-// 每帧自动根据 count_fn() 同步行数并钳制 *selected，支持方向键、鼠标滚轮点击及 Enter 触发
+// 自适应多列对齐列表组件（光标/选中两步模型）：
+// - 光标：方向键/滚轮/鼠标悬停移动，仅高亮，不改变 *selected；
+// - 选中：Enter 或鼠标左键单击，写入 *selected 并触发 on_select。
+// 每帧自动根据 count_fn() 同步行数并钳制 *selected。row_fn 的 active 参数表示该行是否为选中行。
 ftxui::Component DataList(int* selected,
                           std::function<int()> count_fn,
                           std::function<ftxui::Element(int index, bool active, bool focused)> row_fn,
-                          std::function<void()> on_enter = {},
+                          std::function<void()> on_select = {},
                           const std::string& empty_hint = "暂无数据");
 
 } // namespace ui

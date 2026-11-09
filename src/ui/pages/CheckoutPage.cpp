@@ -20,7 +20,7 @@ std::string timeConstraintText(core::TimeConstraint tc) {
 } // namespace
 
 CheckoutPage::CheckoutPage(AppContext& context)
-    : Page(context, "已根据平行让利模型自动匹配最优单券方案。按 ↑/↓ 切换方案，按 T 可测试周末券。") {
+    : Page(context, "已根据平行让利模型自动匹配最优单券方案。按 ↑/↓ 移动光标，Enter 选中方案，再点击「确认支付」。") {
     nav_bar_ = buildCustomerNavBar(0);
 
     scheme_list_ = DataList(
@@ -87,32 +87,21 @@ CheckoutPage::CheckoutPage(AppContext& context)
                 std::move(right_el)
             });
         },
-        [this] { executePayment(); });
+        {});
 
-    pay_btn_ = Button([this]() -> ButtonOption {
-        ButtonOption opt;
-        opt.on_click = [this] { executePayment(); };
-        opt.transform = [this](const EntryState& st) -> Element {
-            std::string lbl;
-            if (paid_success_) {
-                lbl = " [ 支付已完成，返回商城首页 (Enter) ] ";
-            } else {
-                std::shared_ptr<shop::Coupon> pick = nullptr;
-                const bool auto_opt = (selected_idx_ == 0);
-                if (selected_idx_ >= 2 && selected_idx_ - 2 < static_cast<int>(eval_items_.size())) {
-                    pick = eval_items_[static_cast<std::size_t>(selected_idx_ - 2)].coupon;
-                }
-                const auto plan = ctx.computeQuote(pick, auto_opt);
-                lbl = " [ 确认支付 " + money(plan.final_pay_amount) + " (Enter) ] ";
+    pay_btn_ = StyledButton(
+        [this] {
+            if (paid_success_) return std::string("支付已完成，返回商城首页");
+            std::shared_ptr<shop::Coupon> pick = nullptr;
+            const bool auto_opt = (selected_idx_ == 0);
+            if (selected_idx_ >= 2 && selected_idx_ - 2 < static_cast<int>(eval_items_.size())) {
+                pick = eval_items_[static_cast<std::size_t>(selected_idx_ - 2)].coupon;
             }
-            Element el = text(lbl) | bold;
-            if (st.focused) {
-                return std::move(el) | color(Color::Black) | bgcolor(theme::Accent);
-            }
-            return std::move(el) | color(theme::Accent);
-        };
-        return opt;
-    }());
+            const auto plan = ctx.computeQuote(pick, auto_opt);
+            return "确认支付 " + money(plan.final_pay_amount);
+        },
+        [this] { executePayment(); },
+        [] { return ButtonKind::Primary; });
 
     go_recharge_btn_ = ActionButton("去充值", [this] {
         pending_action = PageAction::push(std::make_unique<UserCenterPage>(ctx));
@@ -367,7 +356,7 @@ Element CheckoutPage::render() {
     return renderCustomerFrame(
         nav_bar_,
         hbox({std::move(left_panel) | flex, std::move(right_panel)}),
-        "↑/↓ 切换用券方案 | Enter 确认支付 | T 切换工作日/周末 | Esc 返回上一页");
+        "↑/↓ 移动光标 | Enter 选中方案 | Tab 到支付按钮 | T 切换工作日/周末 | Esc 返回上一页");
 }
 
 } // namespace ui

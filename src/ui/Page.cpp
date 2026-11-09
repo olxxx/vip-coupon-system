@@ -17,21 +17,11 @@ namespace {
 Component makeNavTabButton(std::function<std::string()> label_fn,
                            bool is_active_tab,
                            std::function<void()> on_click,
-                           Color custom_color = Color::GrayLight) {
-    ButtonOption opt;
-    opt.on_click = std::move(on_click);
-    opt.transform = [label_fn = std::move(label_fn), is_active_tab, custom_color](const EntryState& st) -> Element {
-        const std::string lbl = label_fn();
-        Element el = text(" [ " + lbl + " ] ");
-        if (st.focused) {
-            return std::move(el) | bold | color(Color::Black) | bgcolor(Color::White);
-        }
-        if (is_active_tab) {
-            return std::move(el) | bold | color(Color::White) | bgcolor(theme::RowSelectBg);
-        }
-        return std::move(el) | color(custom_color);
-    };
-    return Button(opt);
+                           ButtonKind inactive_kind = ButtonKind::Tab) {
+    return StyledButton(
+        std::move(label_fn),
+        std::move(on_click),
+        [is_active_tab, inactive_kind] { return is_active_tab ? ButtonKind::TabActive : inactive_kind; });
 }
 
 std::string tierCode(core::UserTier tier) {
@@ -91,7 +81,7 @@ Component Page::buildCustomerNavBar(int active_tab) {
         [this] { return "◀ 返回:" + ctx.prev_page_name + "(Esc)"; },
         false,
         [this] { pending_action = PageAction::pop(); },
-        theme::Accent);
+        ButtonKind::Link);
     auto btn_back = Maybe(btn_back_raw, [this] { return !ctx.prev_page_name.empty(); });
 
     auto btn_day = makeNavTabButton(

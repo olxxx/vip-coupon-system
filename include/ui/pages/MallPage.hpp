@@ -30,6 +30,7 @@ private:
 
     void refreshFilter();
     void handleAddToCart();
+    void onProductSelected();
 
 public:
     explicit MallPage(AppContext& ctx, std::string welcome_msg = "");

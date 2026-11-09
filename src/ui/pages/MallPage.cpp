@@ -11,7 +11,7 @@ using namespace ftxui;
 MallPage::MallPage(AppContext& context, std::string welcome_msg)
     : Page(context,
            welcome_msg.empty()
-               ? "当前焦点：商品货架列表。按 ↑/↓ 选择商品，按 Enter 直接加入购物车。"
+               ? "当前焦点：商品货架列表。按 ↑/↓ 移动光标，Enter 选中商品，再点击「加入购物车」。"
                : std::move(welcome_msg)),
       cat_labels_({"全部", "数码3C", "服饰鞋包", "食品生鲜", "日用百货", "其他"}) {
     nav_bar_ = buildCustomerNavBar(1);
@@ -60,12 +60,12 @@ MallPage::MallPage(AppContext& context, std::string welcome_msg)
                 std::move(stock_el)
             });
         },
-        [this] { handleAddToCart(); },
+        [this] { onProductSelected(); },
         "无匹配商品");
 
     qty_dec_btn_ = ActionButton("-", [this] { add_qty_ = std::max(1, add_qty_ - 1); });
     qty_inc_btn_ = ActionButton("+", [this] { add_qty_ = std::min(999, add_qty_ + 1); });
-    add_cart_btn_ = ActionButton("加入购物车 (Enter)", [this] { handleAddToCart(); }, true);
+    add_cart_btn_ = ActionButton("加入购物车", [this] { handleAddToCart(); }, true);
     go_cart_btn_ = ActionButton("查看购物车", [this] {
         pending_action = PageAction::push(std::make_unique<CartPage>(ctx));
     });
@@ -118,6 +118,13 @@ void MallPage::refreshFilter() {
     } else {
         selected_idx_ = std::clamp(selected_idx_, 0, static_cast<int>(filtered_products_.size()) - 1);
     }
+}
+
+void MallPage::onProductSelected() {
+    refreshFilter();
+    if (filtered_products_.empty()) return;
+    const auto& sel = filtered_products_[static_cast<std::size_t>(selected_idx_)];
+    setStatus("已选中 " + sel->getName() + "，按 Tab/→ 进入右侧详情区，点击「加入购物车」。", false);
 }
 
 void MallPage::handleAddToCart() {
@@ -237,7 +244,7 @@ Element MallPage::render() {
     return renderCustomerFrame(
         nav_bar_,
         std::move(body),
-        "↑/↓ 选择商品 | Enter 加购 | +/- 步进数量 | 1-4 压栈切页 | T 切换周末 | Esc 返回");
+        "↑/↓ 移动光标 | Enter 选中 | Tab 进入详情区 | +/- 步进数量 | 1-4 压栈切页 | T 切换周末 | Esc 返回");
 }
 
 } // namespace ui

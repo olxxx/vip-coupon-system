@@ -26,6 +26,19 @@ std::string render_to_text(ui::PageManager& mgr) {
     return screen.ToString();
 }
 
+// 辅助函数：模拟鼠标在整个画布上无按键移动（仅悬停，不点击）
+void sweep_mouse_hover(ui::PageManager& mgr) {
+    for (int y = 0; y < 36; ++y) {
+        for (int x = 0; x < 120; ++x) {
+            ftxui::Mouse m;
+            m.button = ftxui::Mouse::None;
+            m.motion = ftxui::Mouse::Moved;
+            m.x = x;
+            m.y = y;
+            mgr.OnEvent(ftxui::Event::Mouse("", m));
+        }
+    }
+}
 } // namespace
 
 int main() {
@@ -106,8 +119,12 @@ int main() {
         assert(mall_text.find("demo") != std::string::npos);
         assert(mall_text.find("机械键盘") != std::string::npos);
 
-        // 在商城货架按 '+' 增加数量，按 Enter 加入购物车 (P1001 无线机械键盘 299.0 * 2 = 598.0)
+        // 在商城货架按 '+' 增加数量；Enter 仅选中商品，需 → 进入详情区后在「加入购物车」按钮上按 Enter 才加购 (P1001 无线机械键盘 299.0 * 2 = 598.0)
         mgr->OnEvent(ftxui::Event::Character('+'));
+        mgr->OnEvent(ftxui::Event::Return);
+        assert(ctx.cart.getItemQuantity("P1001") == 0); // Enter 只选中，不加购
+        mgr->OnEvent(ftxui::Event::ArrowRight);
+        mgr->OnEvent(ftxui::Event::ArrowDown);
         mgr->OnEvent(ftxui::Event::Return);
         assert(ctx.cart.getItemQuantity("P1001") == 2);
 
@@ -126,7 +143,10 @@ int main() {
         assert(cart_text.find("机械键盘") != std::string::npos);
         assert(cart_text.find("分品类金额统计") != std::string::npos);
 
-        // 在购物车列表按 Enter 进入收银台
+        // 在购物车列表按 → 进入右侧操作区，↓↓ 到「前往收银台」按钮并按 Enter
+        mgr->OnEvent(ftxui::Event::ArrowRight);
+        mgr->OnEvent(ftxui::Event::ArrowDown);
+        mgr->OnEvent(ftxui::Event::ArrowDown);
         mgr->OnEvent(ftxui::Event::Return);
         assert(mgr->get_current_page_name() == "收银台");
         auto checkout_text = render_to_text(*mgr);
@@ -138,8 +158,11 @@ int main() {
         mgr->OnEvent(ftxui::Event::Character('T'));
         assert(ctx.isWeekend() == !prev_weekend);
 
-        // 在收银台方案列表按 Enter 确认支付并扣款
+        // 在收银台列表按 Enter 选中最优方案，→ 进入支付按钮并按 Enter 确认支付
         double before_balance = ctx.user_mgr.getCurrentCustomer()->getBalance();
+        mgr->OnEvent(ftxui::Event::Return);
+        assert(!ctx.cart.empty()); // 选中方案不会直接支付
+        mgr->OnEvent(ftxui::Event::ArrowRight);
         mgr->OnEvent(ftxui::Event::Return);
         assert(ctx.cart.empty());
         assert(ctx.user_mgr.getCurrentCustomer()->getBalance() < before_balance);
@@ -195,10 +218,42 @@ int main() {
         // 在后台栈底按 Esc 应登出并回到系统登录页，再按 Esc 触发退出回调
         mgr->OnEvent(ftxui::Event::Escape);
         assert(mgr->get_current_page_name() == "系统登录");
+        mgr->OnEvent(ftxui::Event::Escape); // 登录页输入框聚焦：首次 Esc 仅退出输入
+        assert(!exited);
         mgr->OnEvent(ftxui::Event::Escape);
         assert(exited);
 
         std::cout << "[PASS] 4. 管理后台 3 大模块渲染、RBAC 权限分级与 Esc 退出闭环验证通过" << std::endl;
+    }
+
+    // 5. 验证鼠标悬停不会抢走输入框焦点
+    {
+        ctx.logout();
+        mgr->reset_stack(std::make_unique<ui::LoginPage>(ctx));
+        render_to_text(*mgr); // 布局一次，记录各控件区域
+        mgr->OnEvent(ftxui::Event::Character('x'));
+        mgr->OnEvent(ftxui::Event::Character('y'));
+        sweep_mouse_hover(*mgr);
+        mgr->OnEvent(ftxui::Event::Character('z'));
+        assert(render_to_text(*mgr).find("xyz") != std::string::npos);
+
+        assert(ctx.loginCustomer("demo", "123456").success);
+        mgr->reset_stack(std::make_unique<ui::MallPage>(ctx));
+        render_to_text(*mgr);
+        mgr->OnEvent(ftxui::Event::Character('/'));
+        mgr->OnEvent(ftxui::Event::Character('k'));
+        sweep_mouse_hover(*mgr);
+        mgr->OnEvent(ftxui::Event::Character('b'));
+        assert(render_to_text(*mgr).find("kb") != std::string::npos);
+
+        // 输入框聚焦时 Esc 只退出输入，不返回上一页
+        mgr->push_page(std::make_unique<ui::CartPage>(ctx));
+        mgr->pop_page();
+        assert(mgr->get_current_page_name() == "商城货架");
+        mgr->OnEvent(ftxui::Event::Character('/'));
+        mgr->OnEvent(ftxui::Event::Escape);
+        assert(mgr->get_current_page_name() == "商城货架");
+        std::cout << "[PASS] 5. 鼠标悬停不抢输入框焦点、Esc 先退出输入 验证通过" << std::endl;
     }
 
     if (fs::exists(test_dir)) {
