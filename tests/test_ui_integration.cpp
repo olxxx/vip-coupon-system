@@ -135,6 +135,10 @@ int main() {
         assert(square_text.find("一键领取全部免费券") != std::string::npos);
         mgr->OnEvent(ftxui::Event::Character('A'));
         assert(ctx.user_mgr.getCurrentCustomer()->getCouponCount() >= 1);
+        // 领取成功属于重要提示：弹出模态弹窗并独占按键，按 '2' 不应切页，Esc 关闭后才恢复\r\n        mgr->OnEvent(ftxui::Event::Character('2'));
+        assert(mgr->get_current_page_name() == "领券中心");
+        mgr->OnEvent(ftxui::Event::Escape);
+        assert(mgr->get_current_page_name() == "领券中心");
 
         // 按快捷键 '2' 推入购物车页，验证渲染与分品类统计
         mgr->OnEvent(ftxui::Event::Character('2'));

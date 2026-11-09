@@ -265,7 +265,7 @@ void LoginPage::doLogin() {
 void LoginPage::doCustomerRegister() {
     attempted_ = true;
     auto res = ctx.registerCustomer(username_, password_);
-    notify(res);
+    notifyImportant(res);
     if (!res.success) shake_until_ = Clock::now() + std::chrono::milliseconds(kShakeMs);
 }
 

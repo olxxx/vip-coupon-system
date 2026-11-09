@@ -157,7 +157,7 @@ void UserCenterPage::handleCustomRecharge() {
         setStatus("充值金额无效：请输入大于 0 的数字（最多两位小数）", true);
         return;
     }
-    notify(ctx.recharge(amt, "个人中心自定义充值"));
+    notifyImportant(ctx.recharge(amt, "个人中心自定义充值"));
     syncData();
 }
 

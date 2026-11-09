@@ -43,7 +43,7 @@ AdminPage::AdminPage(AppContext& context)
     auto reset_click = [this] {
         const auto cur_adm = ctx.user_mgr.getCurrentAdmin();
         if (!cur_adm || !cur_adm->canResetSystem()) {
-            notify(ctx.resetSystem());
+            notifyImportant(ctx.resetSystem());
             return;
         }
         if (!reset_armed_) {
@@ -53,7 +53,7 @@ AdminPage::AdminPage(AppContext& context)
         }
         reset_armed_ = false;
         auto res = ctx.resetSystem();
-        notify(res);
+        notifyImportant(res);
         if (res.success) {
             pending_action = PageAction::reset(std::make_unique<LoginPage>(ctx));
         }
@@ -113,7 +113,7 @@ AdminPage::AdminPage(AppContext& context)
     del_prod_btn_ = ActionButton("下架", [this] {
         syncData();
         if (products_.empty()) return;
-        notify(ctx.removeProduct(products_[static_cast<std::size_t>(prod_idx_)]->getId()));
+        notifyImportant(ctx.removeProduct(products_[static_cast<std::size_t>(prod_idx_)]->getId()));
         syncData();
     });
 
@@ -144,7 +144,7 @@ AdminPage::AdminPage(AppContext& context)
         }
         const auto cat = static_cast<core::ProductCategory>(new_cat_ + 1);
         auto res = ctx.addProduct(new_id_, new_name_, cat, p, s);
-        notify(res);
+        notifyImportant(res);
         syncData();
     }, true);
 
@@ -177,7 +177,7 @@ AdminPage::AdminPage(AppContext& context)
     del_cpn_btn_ = ActionButton("下架移除选中券模板", [this] {
         syncData();
         if (coupons_.empty()) return;
-        notify(ctx.removeCoupon(coupons_[static_cast<std::size_t>(cpn_idx_)]->getTemplateId()));
+        notifyImportant(ctx.removeCoupon(coupons_[static_cast<std::size_t>(cpn_idx_)]->getTemplateId()));
         syncData();
     });
 
@@ -211,7 +211,7 @@ AdminPage::AdminPage(AppContext& context)
             setStatus("请填写有效的优惠券数值参数", true);
             return;
         }
-        notify(ctx.issueCoupon(d));
+        notifyImportant(ctx.issueCoupon(d));
         syncData();
     }, true);
 
@@ -249,7 +249,7 @@ AdminPage::AdminPage(AppContext& context)
         syncData();
         if (customers_.empty()) return;
         const auto uname = customers_[static_cast<std::size_t>(user_idx_)]->getUsername();
-        notify(ctx.updateCustomerTier(uname, static_cast<core::UserTier>(target_tier_)));
+        notifyImportant(ctx.updateCustomerTier(uname, static_cast<core::UserTier>(target_tier_)));
         syncData();
     }, true);
 
@@ -257,7 +257,7 @@ AdminPage::AdminPage(AppContext& context)
         syncData();
         if (customers_.empty()) return;
         const auto uname = customers_[static_cast<std::size_t>(user_idx_)]->getUsername();
-        notify(ctx.removeCustomer(uname));
+        notifyImportant(ctx.removeCustomer(uname));
         syncData();
     });
 

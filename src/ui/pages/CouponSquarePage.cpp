@@ -156,7 +156,7 @@ void CouponSquarePage::handleAcquireSelected() {
 }
 
 void CouponSquarePage::handleClaimAllFree() {
-    notify(ctx.claimAllFreeCoupons());
+    notifyImportant(ctx.claimAllFreeCoupons());
     syncPool();
 }
 

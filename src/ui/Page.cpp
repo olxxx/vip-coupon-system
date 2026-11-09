@@ -175,17 +175,104 @@ Element Page::renderCustomerHeader(const Component& nav_bar) const {
 }
 
 Element Page::renderFooterBar(const std::string& key_hints) const {
-    const Color msg_color = is_error ? theme::Bad : theme::Good;
-    const std::string prefix = is_error ? " [✗ 错误] " : " [✓ 提示] ";
-    const std::string stack_info = " | 栈(" + std::to_string(ctx.stack_depth) + "/8) ";
+    const bool has_msg = !status_msg.empty();
+    const Element msg_line = has_msg
+        ? hbox({text(" ✓ ") | bold | color(theme::Good), text(status_msg) | color(theme::Good) | flex})
+        : hbox({text(" 就绪") | color(theme::Muted)});
+    const Element hint_line = hbox({text(" " + key_hints) | color(theme::Muted), filler(),
+        text("栈 " + std::to_string(ctx.stack_depth) + "/8 ") | color(theme::Muted)});
 
-    return hbox({
-        text(prefix) | bold | color(msg_color),
-        text(status_msg) | color(msg_color),
-        filler(),
-        text(key_hints + stack_info) | color(theme::Muted)
-    }) | borderStyled(ROUNDED, theme::Muted);
+    return vbox({msg_line, hint_line}) | borderStyled(ROUNDED, theme::Muted);
 }
+
+void Page::showPopup(std::string title, std::string msg, bool err) {
+    popup_ = Popup{};
+    popup_.open = true;
+    popup_.error = err;
+    popup_.title = std::move(title);
+    popup_.msg = std::move(msg);
+
+    // 推荐导航：仅消费者会话 + 错误提示
+    if (err && ctx.user_mgr.getCurrentCustomer()) {
+        const std::string& m = popup_.msg;
+        auto has = [&m](const char* kw) { return m.find(kw) != std::string::npos; };
+        if (has("余额不足")) {
+            popup_.navs.push_back({"去个人中心充值", [this] { return std::make_unique<UserCenterPage>(ctx); }});
+        } else if (has("购物车为空")) {
+            popup_.navs.push_back({"去商城选购", [this] { return std::make_unique<MallPage>(ctx); }});
+        } else if (has("库存")) {
+            popup_.navs.push_back({"返回商城", [this] { return std::make_unique<MallPage>(ctx); }});
+            popup_.navs.push_back({"查看购物车", [this] { return std::make_unique<CartPage>(ctx); }});
+        } else if (has("等级") || has("优惠券") || has("券")) {
+            popup_.navs.push_back({"去领券中心", [this] { return std::make_unique<CouponSquarePage>(ctx); }});
+        }
+    }
+    popup_.cursor = static_cast<int>(popup_.navs.size()); // 默认聚焦"确定"，防止 Enter 连击误跳转
+}
+
+void Page::handlePopupEvent(Event event, PageAction& out_action) {
+    const int last = static_cast<int>(popup_.navs.size()); // "确定"的下标
+    auto activate = [&](int idx) {
+        popup_.open = false;
+        if (idx < last) out_action = PageAction::push(popup_.navs[static_cast<std::size_t>(idx)].make());
+    };
+    if (event.is_mouse()) {
+        const auto m = event.mouse();
+        for (int i = 0; i <= last && i < static_cast<int>(popup_.boxes.size()); ++i) {
+            if (!popup_.boxes[static_cast<std::size_t>(i)].Contain(m.x, m.y)) continue;
+            popup_.cursor = i; // 悬停即移动光标
+            if (m.button == Mouse::Left && m.motion == Mouse::Pressed) activate(i);
+            break;
+        }
+        return;
+    }
+    if (event == Event::Escape) {
+        popup_.open = false;
+    } else if (event == Event::ArrowLeft || event == Event::TabReverse) {
+        popup_.cursor = (popup_.cursor + last) % (last + 1);
+    } else if (event == Event::ArrowRight || event == Event::Tab) {
+        popup_.cursor = (popup_.cursor + 1) % (last + 1);
+    } else if (event == Event::Return || event == Event::Character(' ')) {
+        activate(popup_.cursor);
+    }
+    // 其余按键（含鼠标）一律吞掉，由 PageManager 保证不下传
+}
+
+Element Page::renderPopupBox() const {
+    const Color tone = popup_.error ? theme::Bad : theme::Good;
+    const std::string icon = popup_.error ? " ✗ " : " ✓ ";
+
+    Elements buttons;
+    popup_.boxes.resize(popup_.navs.size() + 1);
+    for (std::size_t i = 0; i <= popup_.navs.size(); ++i) {
+        const bool is_ok = (i == popup_.navs.size());
+        const bool focused = static_cast<int>(i) == popup_.cursor;
+        Element b = text(" " + (is_ok ? std::string("确定") : popup_.navs[i].label) + " ");
+        if (focused) b = b | bold | color(Color::Black) | bgcolor(is_ok ? tone : theme::Accent);
+        else b = b | color(is_ok ? Color::GrayLight : theme::Accent);
+        if (!buttons.empty()) buttons.push_back(text("  "));
+        buttons.push_back(std::move(b) | reflect(popup_.boxes[i]));
+    }
+
+    return vbox({
+               text(icon + popup_.title + " ") | bold | color(tone) | hcenter,
+               separator() | color(Color::GrayDark),
+               paragraph(popup_.msg) | color(Color::White) | xflex,
+               text(""),
+               hbox(std::move(buttons)) | hcenter,
+               text(""),
+               text("←/→ 切换 · Enter 确认 · Esc 关闭") | color(theme::Muted) | hcenter,
+           }) |
+           size(WIDTH, GREATER_THAN, 36) | size(WIDTH, LESS_THAN, 56) |
+           borderStyled(ROUNDED, tone) | clear_under | center;
+}
+
+Element Page::renderWithPopup() {
+    Element base = render();
+    if (!popup_.open) return base;
+    return dbox({std::move(base) | dim, renderPopupBox()});
+}
+
 
 Element Page::renderCustomerFrame(const Component& nav_bar,
                                   Element body,

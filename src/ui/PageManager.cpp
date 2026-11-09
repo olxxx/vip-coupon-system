@@ -79,6 +79,18 @@ std::string PageManager::get_current_page_name() const {
     return "";
 }
 
+bool PageManager::apply(PageAction action) {
+    switch (action.type) {
+        case PageAction::Type::None:   return false;
+        case PageAction::Type::Pop:    pop_page(); return true;
+        case PageAction::Type::Push:   push_page(std::move(action.next_page)); return true;
+        case PageAction::Type::Change: change_page(std::move(action.next_page)); return true;
+        case PageAction::Type::Reset:  reset_stack(std::move(action.next_page)); return true;
+        case PageAction::Type::Quit:   if (exit_closure) exit_closure(); return true;
+    }
+    return false;
+}
+
 bool PageManager::OnEvent(Event event) {
     if (event == Event::CtrlQ) {
         if (exit_closure) exit_closure();
@@ -86,27 +98,25 @@ bool PageManager::OnEvent(Event event) {
     }
     if (page_stack.empty()) return false;
 
-    PageAction action = PageAction::none();
-    bool handled = page_stack.back()->handle_event(event, action);
-
-    switch (action.type) {
-        case PageAction::Type::None:   return handled;
-        case PageAction::Type::Pop:    pop_page(); return true;
-        case PageAction::Type::Push:   push_page(std::move(action.next_page)); return true;
-        case PageAction::Type::Change: change_page(std::move(action.next_page)); return true;
-        case PageAction::Type::Reset:  reset_stack(std::move(action.next_page)); return true;
-        case PageAction::Type::Quit:   if (exit_closure) exit_closure(); return true;
+    // 弹窗打开时独占全部输入（含鼠标），绝不下传给底层页面
+    if (page_stack.back()->hasPopup()) {
+        PageAction action = PageAction::none();
+        page_stack.back()->handlePopupEvent(event, action);
+        apply(std::move(action));
+        return true;
     }
-    return handled;
+
+    PageAction action = PageAction::none();
+    const bool handled = page_stack.back()->handle_event(event, action);
+    return apply(std::move(action)) || handled;
 }
 
 Element PageManager::OnRender() {
     if (page_stack.empty()) {
         return text("系统无活动页面") | center;
     }
-    return page_stack.back()->render();
+    return page_stack.back()->renderWithPopup();
 }
-
 void PageManager::push_internal(std::unique_ptr<Page> page) {
     page->on_enter();
     page_stack.push_back(std::move(page));

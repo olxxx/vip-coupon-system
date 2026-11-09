@@ -49,6 +49,7 @@ public:
     bool Focusable() const override { return true; }
 
 private:
+    bool apply(PageAction action);
     void push_internal(std::unique_ptr<Page> page);
     void sync_context_stack_info();
 };

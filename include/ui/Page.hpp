@@ -7,9 +7,11 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace ui {
 
@@ -53,7 +55,7 @@ public:
     virtual ~Page() = default;
 
     virtual void on_enter() {}
-    virtual void on_exit() {}
+    virtual void on_exit() { popup_.open = false; }
     virtual std::string get_page_name() const = 0;
 
     // 核心事件分发机制：
@@ -66,17 +68,49 @@ public:
         return container->Render();
     }
 
+    // 弹窗：由 PageManager 在分发事件前检查，打开时独占全部按键
+    bool hasPopup() const { return popup_.open; }
+    void handlePopupEvent(ftxui::Event event, PageAction& out_action);
+    // 渲染页面；弹窗打开时叠加在上层
+    ftxui::Element renderWithPopup();
+
+private:
+    struct PopupNav {
+        std::string label;
+        std::function<std::unique_ptr<Page>()> make;
+    };
+    struct Popup {
+        bool open = false;
+        bool error = false;
+        std::string title;
+        std::string msg;
+        std::vector<PopupNav> navs; // 推荐导航；末尾追加的"确定"按钮不在其中
+        int cursor = 0;             // 0..navs.size()，navs.size() 即"确定"
+        mutable std::vector<ftxui::Box> boxes; // 各按钮屏幕区域，供鼠标命中检测
+    } popup_;
+
+    ftxui::Element renderPopupBox() const;
+
 protected:
-    // 更新底部状态栏消息
-    void notify(const core::Result& res) {
-        status_msg = res.message;
-        is_error = !res.success;
+    // 提示分级：错误 -> 弹窗；重要成功 -> 弹窗(notifyImportant)；次要成功 -> 底部消息行
+    void notify(const core::Result& res) { setStatus(res.message, !res.success); }
+
+    void notifyImportant(const core::Result& res) {
+        if (res.success) showPopup("操作成功", res.message, false);
+        else setStatus(res.message, true);
     }
 
     void setStatus(std::string msg, bool err = false) {
+        if (err) {
+            showPopup("操作失败", std::move(msg), true);
+            return;
+        }
         status_msg = std::move(msg);
-        is_error = err;
+        is_error = false;
     }
+
+    // 打开模态弹窗 (错误时按消息关键词附带推荐导航)
+    void showPopup(std::string title, std::string msg, bool err);
 
     // 构建消费者端顶部导航按钮组 (active_tab: 1=商城, 2=购物车, 3=领券, 4=个人中心, 0=其他如收银台)
     ftxui::Component buildCustomerNavBar(int active_tab);
@@ -87,7 +121,7 @@ protected:
     // 渲染消费者端公共顶栏 (资产摘要 + 导航按钮栏)
     ftxui::Element renderCustomerHeader(const ftxui::Component& nav_bar) const;
 
-    // 渲染底部单行状态与快捷键提示栏
+    // 渲染底部两行栏：消息行 + 快捷键提示行
     ftxui::Element renderFooterBar(const std::string& key_hints) const;
 
     // 组装消费者标准全屏页面框架 (顶栏 + 页面主体 + 底栏)
