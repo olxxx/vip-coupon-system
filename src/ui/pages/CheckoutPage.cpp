@@ -89,7 +89,7 @@ CheckoutPage::CheckoutPage(AppContext& context)
         },
         {});
 
-    pay_btn_ = StyledButton(
+    pay_btn_ = StyledBigButton(
         [this] {
             if (paid_success_) return std::string("支付已完成，返回商城首页");
             std::shared_ptr<shop::Coupon> pick = nullptr;
@@ -238,7 +238,7 @@ Element CheckoutPage::render() {
             separator() | color(theme::Muted),
             text(selected_idx_ == 1
                      ? " 当前选择：不使用优惠券，仅享受会员等级基础折扣。"
-                     : " 提示：背包中若无可用优惠券，可点击右下方 [ 去领券 ] 申领后再按 Esc 返回。")
+                     : " 提示：背包中若无可用优惠券，可点击右下方 [去领券] 申领后再按 Esc 返回。")
                 | color(theme::Muted)
         });
     }
@@ -259,7 +259,8 @@ Element CheckoutPage::render() {
             scheme_list_->Render() | flex,
             std::move(diag_box)
         }),
-        scheme_list_->Focused());
+        scheme_list_->Focused(),
+        PanelStyle::Primary);
 
     // 右侧账单面板或支付成功回执卡
     const bool right_focused = pay_btn_->Focused() || go_recharge_btn_->Focused() ||
@@ -269,29 +270,34 @@ Element CheckoutPage::render() {
     if (paid_success_ && receipt_.valid) {
         const double total_saved = receipt_.member_saving + receipt_.coupon_saving;
         Element upgrade_banner = receipt_.upgraded_tier_name.empty()
-            ? text("会员等级保持不变") | color(theme::Muted)
-            : (text("★ 恭喜晋升: " + receipt_.old_tier_name + " -> " + receipt_.upgraded_tier_name)
+            ? text(" 会员等级保持不变") | color(theme::Muted)
+            : (text(" ★ 恭喜晋升: " + receipt_.old_tier_name + " -> " + receipt_.upgraded_tier_name)
                | bold | color(theme::Warn));
 
         right_content = vbox({
             text(" ✓ 订单支付已完成 (支付回执单)") | bold | color(theme::Good),
             separator() | color(theme::Muted),
-            kv("订单编号:", receipt_.order_id),
-            kv("商品原价总额:", money(receipt_.origin_total)),
-            kv("会员折扣让利:", text("- " + money(receipt_.member_saving)) | color(theme::Good)),
-            kv("优惠券抵扣 (" + receipt_.coupon_name + "):",
+            kv(" 商品原价总额:", money(receipt_.origin_total)),
+            kv(" 会员折扣让利:", text("- " + money(receipt_.member_saving)) | color(theme::Good)),
+            kv(" 优惠券抵扣 (" + receipt_.coupon_name + "):",
                text("- " + money(receipt_.coupon_saving)) | color(theme::Good)),
-            kv("本单累计节省:", text(money(total_saved)) | bold | color(theme::Good)),
+            kv(" 本单累计节省:", text(money(total_saved)) | bold | color(theme::Good)),
             separator() | color(theme::Muted),
-            kv("最终实付金额:", text(money(receipt_.final_paid)) | bold | color(theme::Warn)),
-            kv("账户余额变动:",
+            kv(" 最终实付金额:", text(money(receipt_.final_paid)) | bold | color(theme::Warn)),
+            kv(" 账户余额变动:",
                text(money(receipt_.balance_before) + " -> " + money(receipt_.balance_after))
                    | color(theme::Accent)),
             std::move(upgrade_banner),
             filler(),
             separator() | color(theme::Muted),
-            pay_btn_->Render() | hcenter,
-            hbox({go_recharge_btn_->Render(), go_coupon_btn_->Render(), back_btn_->Render()}) | hcenter
+            pay_btn_->Render(),
+            hbox({
+                go_recharge_btn_->Render(),
+                filler(),
+                go_coupon_btn_->Render(),
+                filler(),
+                back_btn_->Render()
+            })
         }) | flex;
     } else {
         std::shared_ptr<shop::Coupon> pick = nullptr;
@@ -311,7 +317,7 @@ Element CheckoutPage::render() {
             const double diff = std::max(0.0, inspect_cpn->getMinSpend() - cat_base);
             std::string base_str = money(cat_base);
             if (diff > 1e-4) base_str += " (差 " + money(diff) + " 达标)";
-            base_row = kv("券适用基数 (" + core::getCategoryName(inspect_cpn->getTargetCategory()) + "):",
+            base_row = kv(" 券适用基数 (" + core::getCategoryName(inspect_cpn->getTargetCategory()) + "):",
                           text(base_str) | color(diff > 1e-4 ? theme::Warn : Color::White));
         }
 
@@ -321,36 +327,42 @@ Element CheckoutPage::render() {
             const double needed = cust->getAmountNeededForNextTier();
             if (plan.final_pay_amount > 1e-4 && core::isAmountGTE(plan.final_pay_amount, needed)) {
                 const auto next_tier = static_cast<core::UserTier>(static_cast<int>(cust->getTier()) + 1);
-                upgrade_preview = text("↑ 本单支付后将晋升为【" + core::getTierConfig(next_tier).name + "】")
+                upgrade_preview = text(" ↑ 本单支付后将晋升为【" + core::getTierConfig(next_tier).name + "】")
                                   | bold | color(theme::Warn);
             } else {
-                upgrade_preview = text("本单后距下一级还差 " + money(std::max(0.0, needed - plan.final_pay_amount)))
+                upgrade_preview = text(" 本单后距下一级还差 " + money(std::max(0.0, needed - plan.final_pay_amount)))
                                   | color(theme::Muted);
             }
         }
 
         right_content = vbox({
-            kv("订单商品原价总额:", money(plan.origin_total)),
-            kv("会员等级让利 (" + tier_name + "):",
+            kv(" 订单商品原价总额:", money(plan.origin_total)),
+            kv(" 会员等级让利 (" + tier_name + "):",
                text("- " + money(plan.member_discount_saving)) | color(theme::Good)),
-            kv("优惠券抵扣 (" + used_cpn_name + "):",
+            kv(" 优惠券抵扣 (" + used_cpn_name + "):",
                text("- " + money(plan.coupon_discount_saving)) | color(theme::Good)),
             std::move(base_row),
             separator() | color(theme::Muted),
-            kv("最终应付实付总额:",
+            kv(" 最终应付实付总额:",
                text(money(plan.final_pay_amount)) | bold | color(theme::Warn)),
-            kv("当前账户可用余额:",
+            kv(" 当前账户可用余额:",
                text(money(bal) + (bal_ok ? " (充足)" : " (余额不足)"))
                    | bold | color(bal_ok ? theme::Good : theme::Bad)),
             std::move(upgrade_preview),
             filler(),
             separator() | color(theme::Muted),
-            pay_btn_->Render() | hcenter,
-            hbox({go_recharge_btn_->Render(), go_coupon_btn_->Render(), back_btn_->Render()}) | hcenter
+            pay_btn_->Render(),
+            hbox({
+                go_recharge_btn_->Render(),
+                filler(),
+                go_coupon_btn_->Render(),
+                filler(),
+                back_btn_->Render()
+            })
         }) | flex;
     }
 
-    Element right_panel = panel("收银台账单明细", std::move(right_content), right_focused)
+    Element right_panel = panel("收银台账单明细", std::move(right_content), right_focused, PanelStyle::Highlight)
                           | size(WIDTH, EQUAL, 48);
 
     return renderCustomerFrame(

@@ -118,6 +118,7 @@ int main() {
         auto mall_text = render_to_text(*mgr);
         assert(mall_text.find("demo") != std::string::npos);
         assert(mall_text.find("机械键盘") != std::string::npos);
+        assert(mall_text.find("页面跳转:") == std::string::npos); // 已移除“页面跳转:”冗余前缀
 
         // 在商城货架按 '+' 增加数量；Enter 仅选中商品，需 → 进入详情区后在「加入购物车」按钮上按 Enter 才加购 (P1001 无线机械键盘 299.0 * 2 = 598.0)
         mgr->OnEvent(ftxui::Event::Character('+'));
@@ -133,6 +134,7 @@ int main() {
         assert(mgr->get_current_page_name() == "领券中心");
         auto square_text = render_to_text(*mgr);
         assert(square_text.find("一键领取全部免费券") != std::string::npos);
+        assert(square_text.find("◀") != std::string::npos); // 栈深>1时最左侧显示向左箭头按钮
         mgr->OnEvent(ftxui::Event::Character('A'));
         assert(ctx.user_mgr.getCurrentCustomer()->getCouponCount() >= 1);
         // 领取成功属于重要提示：弹出模态弹窗并独占按键，按 '2' 不应切页，Esc 关闭后才恢复

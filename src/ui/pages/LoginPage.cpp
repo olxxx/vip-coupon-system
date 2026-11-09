@@ -67,10 +67,10 @@ LoginPage::LoginPage(AppContext& context)
         [this] { show_pw_idx_ = 1 - show_pw_idx_; },
         [] { return ButtonKind::Secondary; });
 
-    auto login_btn = StyledButton(
-        [] { return std::string("  登  录  "); },
+    auto login_btn = BigActionButton(
+        "登  录",
         [this] { doLogin(); },
-        [] { return ButtonKind::Primary; });
+        ButtonKind::Primary);
 
     auto reg_btn    = Maybe(ActionButton("注册新账号", [this] { doCustomerRegister(); }),
                             [this] { return role_tab_ == 0; });
@@ -111,9 +111,6 @@ LoginPage::LoginPage(AppContext& context)
         const bool user_empty = attempted_ && trim(username_).empty();
         const bool pass_empty = attempted_ && password_.empty();
 
-        Element login_box = login_btn->Render() | center
-                            | borderStyled(ROUNDED) | color(theme::Accent);
-
         Element card_body = vbox({
             text("用户权益管理与优惠规划系统") | bold | color(Color::White) | hcenter,
             text("User Rights Management & Coupon Planning System") | color(theme::Muted) | hcenter,
@@ -125,8 +122,8 @@ LoginPage::LoginPage(AppContext& context)
             hbox({col("  密码", 10) | color(Color::GrayLight), pass_in->Render() | flex,
                   text(" "), eye_btn->Render()}),
             hintLine(pass_empty, "请输入密码"),
-            login_box,
-            links->Render() | hcenter,
+            login_btn->Render(),
+            hbox({reg_btn->Render(), text("   "), quit_btn->Render()}) | hcenter,
             separator() | color(theme::Muted),
             text(" 演示账号 (↑/↓ 选择, Enter/单击填入):") | color(theme::Muted),
             preset_list->Render(),
@@ -140,7 +137,7 @@ LoginPage::LoginPage(AppContext& context)
             flash_red = (left / 100) % 2 == 0;
             animation::RequestAnimationFrame();
         }
-        Element card = panel("系统登录", std::move(card_body), true);
+        Element card = panel("系统登录", std::move(card_body), true, PanelStyle::Header);
         if (flash_red) card = std::move(card) | color(theme::Bad);
         card = std::move(card) | size(WIDTH, EQUAL, 60);
 

@@ -76,7 +76,7 @@ CouponSquarePage::CouponSquarePage(AppContext& context)
         {},
         "该筛选条件下暂无优惠券模板");
 
-    acquire_btn_ = StyledButton(
+    acquire_btn_ = StyledBigButton(
         [this] {
             std::string lbl = "免费申领该优惠券";
             if (!filtered_pool_.empty() && selected_idx_ >= 0 &&
@@ -240,7 +240,7 @@ Element CouponSquarePage::render() {
             text("时段:") | color(theme::Muted),
             time_toggle_->Render()
         })
-    }), filter_focused);
+    }), filter_focused, PanelStyle::SubNav);
 
     Element table_header = hbox({
         text("  "),
@@ -257,7 +257,8 @@ Element CouponSquarePage::render() {
             separator() | color(theme::Muted),
             pool_list_->Render() | flex
         }),
-        pool_list_->Focused());
+        pool_list_->Focused(),
+        PanelStyle::Primary);
 
     const bool right_focused = acquire_btn_->Focused() || go_wallet_btn_->Focused() || go_cart_btn_->Focused();
     Element detail_content;
@@ -270,29 +271,32 @@ Element CouponSquarePage::render() {
         const std::string min_tier_name = core::getTierConfig(sel->getMinTier()).name;
 
         detail_content = vbox({
-            kv("模板编号:", sel->getTemplateId()),
-            kv("券面名称:", text(sel->getName()) | bold | color(Color::White)),
-            kv("券种类型:", sel->getTypeDescription()),
-            kv("抵扣规则:", text(sel->getRuleDescription()) | bold | color(theme::Warn)),
+            kv(" 券面名称:", text(sel->getName()) | bold | color(Color::White)),
+            kv(" 券种类型:", sel->getTypeDescription()),
+            kv(" 抵扣规则:", text(sel->getRuleDescription()) | bold | color(theme::Warn)),
             separator() | color(theme::Muted),
-            kv("适用品类:", core::getCategoryName(sel->getTargetCategory())),
-            kv("最低等级:", text(min_tier_name + (tier_ok ? " (已达标)" : " (未达标)"))
-                            | bold | color(tier_ok ? theme::Good : theme::Bad)),
-            kv("时间限制:", timeLimitName(sel->getTimeConstraint())),
-            kv("领券费用:", sel->isFree() ? (text("免费") | color(theme::Good))
-                                          : (text(money(sel->getCost())) | color(theme::Warn))),
-            kv("持有状态:", text(owned ? "已拥有 (限持一张)" : "未持有 (可获取)")
-                            | bold | color(owned ? theme::Warn : theme::Good)),
+            kv(" 适用品类:", core::getCategoryName(sel->getTargetCategory())),
+            kv(" 最低等级:", text(min_tier_name + (tier_ok ? " (已达标)" : " (未达标)"))
+                             | bold | color(tier_ok ? theme::Good : theme::Bad)),
+            kv(" 时间限制:", timeLimitName(sel->getTimeConstraint())),
+            kv(" 领券费用:", sel->isFree() ? (text("免费") | color(theme::Good))
+                                            : (text(money(sel->getCost())) | color(theme::Warn))),
+            kv(" 持有状态:", text(owned ? "已拥有 (限持一张)" : "未持有 (可获取)")
+                             | bold | color(owned ? theme::Warn : theme::Good)),
             filler(),
             separator() | color(theme::Muted),
-            acquire_btn_->Render() | hcenter,
-            hbox({go_wallet_btn_->Render(), text("  "), go_cart_btn_->Render()}) | hcenter
+            acquire_btn_->Render(),
+            hbox({
+                go_wallet_btn_->Render(),
+                filler(),
+                go_cart_btn_->Render()
+            })
         }) | flex;
     } else {
-        detail_content = text("未选择优惠券") | color(theme::Muted);
+        detail_content = text("未选择优惠券") | color(theme::Muted) | center | flex;
     }
 
-    Element right_box = panel("优惠券约束详情与操作", std::move(detail_content), right_focused)
+    Element right_box = panel("优惠券约束详情与操作", std::move(detail_content), right_focused, PanelStyle::Action)
                         | size(WIDTH, EQUAL, 46);
 
     Element body = vbox({

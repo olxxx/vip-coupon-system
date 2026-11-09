@@ -49,6 +49,16 @@ bool Page::handle_event(Event event, PageAction& out_action) {
 }
 
 Component Page::buildCustomerNavBar(int active_tab) {
+    auto can_go_back = [this] {
+        return ctx.stack_depth > 1 || !ctx.prev_page_name.empty();
+    };
+
+    auto btn_back_raw = StyledButton(
+        [] { return "◀"; },
+        [this] { pending_action = PageAction::pop(); },
+        [] { return ButtonKind::Primary; });
+    auto btn_back = Maybe(btn_back_raw, can_go_back);
+
     auto btn_mall = makeNavTabButton(
         [] { return "1.商城货架"; },
         active_tab == 1,
@@ -77,13 +87,6 @@ Component Page::buildCustomerNavBar(int active_tab) {
             if (active_tab != 4) pending_action = PageAction::push(std::make_unique<UserCenterPage>(ctx));
         });
 
-    auto btn_back_raw = makeNavTabButton(
-        [this] { return "◀ 返回:" + ctx.prev_page_name + "(Esc)"; },
-        false,
-        [this] { pending_action = PageAction::pop(); },
-        ButtonKind::Link);
-    auto btn_back = Maybe(btn_back_raw, [this] { return !ctx.prev_page_name.empty(); });
-
     auto btn_day = makeNavTabButton(
         [] { return "切换工作日/周末(T)"; },
         false,
@@ -101,19 +104,28 @@ Component Page::buildCustomerNavBar(int active_tab) {
         });
 
     auto row = Container::Horizontal({
-        btn_mall, btn_cart, btn_coupon, btn_user, btn_back, btn_day, btn_logout
+        btn_back, btn_mall, btn_cart, btn_coupon, btn_user, btn_day, btn_logout
     });
 
-    return Renderer(row, [=] {
-        return hbox({
-            text(" 页面跳转:") | color(theme::Muted),
+    return Renderer(row, [=, this] {
+        const bool show_back = can_go_back();
+        Element left_back = show_back ? btn_back->Render() : text("   ");
+        Element center_tabs = hbox({
             btn_mall->Render(),
+            text("  "),
             btn_cart->Render(),
+            text("  "),
             btn_coupon->Render(),
-            btn_user->Render(),
-            btn_back->Render(),
+            text("  "),
+            btn_user->Render()
+        });
+        return hbox({
+            std::move(left_back),
+            filler(),
+            std::move(center_tabs),
             filler(),
             btn_day->Render(),
+            text(" "),
             btn_logout->Render()
         });
     });
@@ -171,7 +183,7 @@ Element Page::renderCustomerHeader(const Component& nav_bar) const {
         std::move(info_row),
         separator() | color(theme::Muted),
         nav_bar->Render()
-    }), nav_bar->Focused());
+    }), nav_bar->Focused(), PanelStyle::Header);
 }
 
 Element Page::renderFooterBar(const std::string& key_hints) const {
@@ -272,7 +284,6 @@ Element Page::renderWithPopup() {
     if (!popup_.open) return base;
     return dbox({std::move(base) | dim, renderPopupBox()});
 }
-
 
 Element Page::renderCustomerFrame(const Component& nav_bar,
                                   Element body,

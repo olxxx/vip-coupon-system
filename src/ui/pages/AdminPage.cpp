@@ -69,7 +69,21 @@ AdminPage::AdminPage(AppContext& context)
         pending_action = PageAction::reset(std::make_unique<LoginPage>(ctx));
     });
 
-    top_bar_ = Container::Horizontal({tab0_btn, tab1_btn, tab2_btn, reset_btn, logout_btn});
+    auto top_row = Container::Horizontal({tab0_btn, tab1_btn, tab2_btn, reset_btn, logout_btn});
+    top_bar_ = Renderer(top_row, [=] {
+        return hbox({
+            filler(),
+            tab0_btn->Render(),
+            text("  "),
+            tab1_btn->Render(),
+            text("  "),
+            tab2_btn->Render(),
+            filler(),
+            reset_btn->Render(),
+            text(" "),
+            logout_btn->Render()
+        });
+    });
 
     // 2. Tab 0: 商品与库存管理
     prod_list_ = DataList(
@@ -172,7 +186,7 @@ AdminPage::AdminPage(AppContext& context)
     new_name_input_  = TextInput(&new_name_, "商品名称");
     new_price_input_ = TextInput(&new_price_, "单价");
     new_stock_input_ = TextInput(&new_stock_, "库存");
-    add_prod_btn_    = ActionButton("+ 上架新商品至商城", [this] {
+    add_prod_btn_    = BigActionButton("+ 上架新商品至商城", [this] {
         double p = 0.0;
         int s = 0;
         if (!parseAmount(new_price_, p, false) || !parseQuantity(new_stock_, s, true)) {
@@ -183,7 +197,7 @@ AdminPage::AdminPage(AppContext& context)
         auto res = ctx.addProduct(new_id_, new_name_, cat, p, s);
         notifyImportant(res);
         syncData();
-    }, true);
+    }, ButtonKind::Primary);
 
     auto tab0_container = Container::Horizontal({
         prod_list_,
@@ -233,7 +247,7 @@ AdminPage::AdminPage(AppContext& context)
     auto c_max_raw = TextInput(&c_max_, "0不封顶");
     c_max_input_  = Maybe(c_max_raw, [this] { return c_type_ == 1; });
 
-    add_cpn_btn_ = ActionButton("+ 发布至公共领券中心", [this] {
+    add_cpn_btn_ = BigActionButton("+ 发布至公共领券中心", [this] {
         CouponDraft d;
         d.id = c_id_;
         d.name = c_name_;
@@ -251,7 +265,7 @@ AdminPage::AdminPage(AppContext& context)
         }
         notifyImportant(ctx.issueCoupon(d));
         syncData();
-    }, true);
+    }, ButtonKind::Primary);
 
     auto tab1_container = Container::Horizontal({
         Container::Vertical({cpn_list_, del_cpn_btn_}),
@@ -445,19 +459,18 @@ Element AdminPage::renderAdminHeader() {
 
     return panel("后台运营控制台 (AdminPage)", hbox({
         text(" 管理员: ") | color(theme::Muted),
-        text(adm_str + "  ") | bold | color(theme::Warn),
+        text(adm_str) | bold | color(theme::Warn),
         top_bar_->Render() | flex
-    }), top_bar_->Focused());
+    }), top_bar_->Focused(), PanelStyle::Header);
 }
 
 Element AdminPage::renderProductTab() {
     std::string sel_name = "无";
     if (!products_.empty()) {
-        sel_name = "[" + products_[static_cast<std::size_t>(prod_idx_)]->getId() + "] " +
-                   products_[static_cast<std::size_t>(prod_idx_)]->getName();
+        sel_name = products_[static_cast<std::size_t>(prod_idx_)]->getName();
     }
 
-    Element left_box = panel("系统商品列表", prod_list_->Render() | flex, prod_list_->Focused());
+    Element left_box = panel("系统商品列表", prod_list_->Render() | flex, prod_list_->Focused(), PanelStyle::Primary);
 
     const bool maint_focused = stock_input_->Focused() || replenish_btn_->Focused() ||
                                deduct_btn_->Focused() || set_stock_btn_->Focused() ||
@@ -494,7 +507,7 @@ Element AdminPage::renderProductTab() {
             mod_cat_toggle_->Render() | flex,
             mod_cat_btn_->Render()
         })
-    }), maint_focused);
+    }), maint_focused, PanelStyle::Action);
 
     const bool add_focused = new_cat_toggle_->Focused() || new_id_input_->Focused() ||
                              new_name_input_->Focused() || new_price_input_->Focused() ||
@@ -514,8 +527,9 @@ Element AdminPage::renderProductTab() {
             text("  库存: ") | color(theme::Muted),
             new_stock_input_->Render() | flex
         }),
-        add_prod_btn_->Render() | hcenter
-    }), add_focused);
+        filler(),
+        add_prod_btn_->Render()
+    }) | flex, add_focused, PanelStyle::Action);
 
     return hbox({
         std::move(left_box) | flex,
@@ -531,7 +545,8 @@ Element AdminPage::renderCouponTab() {
             separator() | color(theme::Muted),
             del_cpn_btn_->Render() | hcenter
         }),
-        cpn_list_->Focused() || del_cpn_btn_->Focused());
+        cpn_list_->Focused() || del_cpn_btn_->Focused(),
+        PanelStyle::Primary);
 
     const bool form_focused = c_type_toggle_->Focused() || c_cat_toggle_->Focused() ||
                               c_tier_toggle_->Focused() || c_time_toggle_->Focused() ||
@@ -569,16 +584,17 @@ Element AdminPage::renderCouponTab() {
                 c_max_input_->Render() | flex
             }),
             filler(),
-            add_cpn_btn_->Render() | hcenter
+            add_cpn_btn_->Render()
         }) | flex,
-        form_focused) | size(WIDTH, EQUAL, 56);
+        form_focused,
+        PanelStyle::Action) | size(WIDTH, EQUAL, 58);
 
     return hbox({std::move(left_box) | flex, std::move(right_box)}) | flex;
 }
 
 Element AdminPage::renderUserTab() {
-    Element cust_list_box = panel("注册消费者列表", user_list_->Render() | flex, user_list_->Focused());
-    Element adm_list_box  = panel("后台管理员列表", admin_list_->Render() | flex, admin_list_->Focused())
+    Element cust_list_box = panel("注册消费者列表", user_list_->Render() | flex, user_list_->Focused(), PanelStyle::Primary);
+    Element adm_list_box  = panel("后台管理员列表", admin_list_->Render() | flex, admin_list_->Focused(), PanelStyle::Primary)
                             | size(HEIGHT, EQUAL, 8);
 
     const auto adm = ctx.user_mgr.getCurrentAdmin();
@@ -623,7 +639,7 @@ Element AdminPage::renderUserTab() {
         cust_ops_content = text("暂无消费者账号") | color(theme::Muted);
     }
 
-    Element cust_ops_box = panel("消费者账户调控 (RBAC)", std::move(cust_ops_content), cust_ops_focused);
+    Element cust_ops_box = panel("消费者账户调控 (RBAC)", std::move(cust_ops_content), cust_ops_focused, PanelStyle::Action);
 
     const bool adm_ops_focused = admin_role_toggle_->Focused() || mod_adm_role_btn_->Focused() ||
                                  del_adm_btn_->Focused() || new_adm_user_input_->Focused() ||
@@ -647,7 +663,7 @@ Element AdminPage::renderUserTab() {
             text(" "),
             add_adm_btn_->Render()
         })
-    }) | flex, adm_ops_focused);
+    }) | flex, adm_ops_focused, PanelStyle::Action);
 
     return hbox({
         vbox({std::move(cust_list_box) | flex, std::move(adm_list_box)}) | flex,

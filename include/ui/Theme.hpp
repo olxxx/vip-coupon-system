@@ -29,8 +29,24 @@ inline const ftxui::Color SelectCursorBg = ftxui::Color::RGB(14, 105, 160); // #
 
 // --- 视觉排版原语 ---
 
-// 焦点感知圆角面板：focused 为 true 时边框与标题呈天蓝色高亮，否则为暗灰细框
-ftxui::Element panel(const std::string& title, ftxui::Element body, bool focused = false);
+// 面板边框与视觉语义类型
+enum class PanelStyle {
+    Primary,    // 主数据列表面板：圆角边框 (ROUNDED)，聚焦天蓝高亮 ◆
+    Header,     // 全局顶栏面板：双线边框 (DOUBLE)，聚焦天蓝高亮 ❖
+    SubNav,     // 筛选/子模块切换栏：虚线边框 (DASHED)，聚焦天蓝高亮 ◈
+    Action,     // 右侧详情与操控面板：粗线边框 (HEAVY)，聚焦翠绿/天蓝高亮 ✦
+    Highlight   // 账单汇总/会员阶梯重点面板：双线边框 (DOUBLE)，聚焦琥珀金高亮 ★
+};
+
+// 焦点感知多样式面板：失焦时为暗灰边框，聚焦时按 PanelStyle 切换对应边框色与标题装饰
+ftxui::Element panel(const std::string& title,
+                     ftxui::Element body,
+                     bool focused = false,
+                     PanelStyle style = PanelStyle::Primary);
+
+// 面板内部小节标题（带主题色竖线前缀 ▎ 与加粗亮白文字）
+ftxui::Element sectionHeader(const std::string& title,
+                             ftxui::Color bar_color = theme::Accent);
 
 // 固定显示列宽单元（基于 FTXUI 终端字符宽度布局，天然支持 UTF-8 中文双宽对齐）
 ftxui::Element col(ftxui::Element el, int width, bool align_right = false);
@@ -78,6 +94,15 @@ ftxui::Component ActionButton(const std::string& label,
 // 危险/删除类静态文案按钮（使用 ButtonKind::Danger 珊瑚红高亮）
 ftxui::Component DangerButton(const std::string& label,
                               std::function<void()> on_click);
+
+// 大号醒目主操作按钮（3 行高圆角盒式按钮，常态带醒目边框，悬停加深底色，聚焦反白高亮填充）
+ftxui::Component StyledBigButton(std::function<std::string()> label,
+                                 std::function<void()> on_click,
+                                 std::function<ButtonKind()> kind);
+
+ftxui::Component BigActionButton(const std::string& label,
+                                 std::function<void()> on_click,
+                                 ButtonKind kind = ButtonKind::Primary);
 
 // 单行输入框（常态暗底、悬停淡底、聚焦深蓝底）。
 // 聚焦时按 Esc 先退出输入，焦点移到页面内第一个非输入控件（Esc 被消费，不会返回上一页）。

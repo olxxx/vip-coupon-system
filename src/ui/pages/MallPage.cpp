@@ -52,21 +52,20 @@ MallPage::MallPage(AppContext& context, std::string welcome_msg)
                 stock_el = text(std::to_string(p->getStock()));
             }
             return hbox({
-                text(" "),
-                col(p->getId(), 8) | color(theme::Muted),
-                col(p->getName(), 20),
-                col(p->getCategoryName(), 11) | color(Color::GrayLight),
-                col(p->getFormattedPrice(), 11) | color(theme::Good),
+                text("  "),
+                col(p->getName(), 24),
+                col(p->getCategoryName(), 12) | color(Color::GrayLight),
+                col(p->getFormattedPrice(), 12) | color(theme::Good),
                 std::move(stock_el)
             });
         },
         [this] { onProductSelected(); },
         "无匹配商品");
 
-    qty_dec_btn_ = ActionButton("-", [this] { add_qty_ = std::max(1, add_qty_ - 1); });
-    qty_inc_btn_ = ActionButton("+", [this] { add_qty_ = std::min(999, add_qty_ + 1); });
-    add_cart_btn_ = ActionButton("加入购物车", [this] { handleAddToCart(); }, true);
-    go_cart_btn_ = ActionButton("查看购物车", [this] {
+    qty_dec_btn_  = ActionButton("-", [this] { add_qty_ = std::max(1, add_qty_ - 1); });
+    qty_inc_btn_  = ActionButton("+", [this] { add_qty_ = std::min(999, add_qty_ + 1); });
+    add_cart_btn_ = BigActionButton("＋ 加入购物车", [this] { handleAddToCart(); }, ButtonKind::Primary);
+    go_cart_btn_  = ActionButton("查看购物车", [this] {
         pending_action = PageAction::push(std::make_unique<CartPage>(ctx));
     });
     go_coupon_btn_ = ActionButton("去领券中心", [this] {
@@ -98,7 +97,6 @@ void MallPage::refreshFilter() {
     if (kw.empty()) {
         filtered_products_ = ctx.prod_mgr.getProductsByCategory(cat);
     } else {
-        // 先调用后端的 searchByName，再补充按商品编号匹配及分类过滤
         auto by_name = ctx.prod_mgr.searchByName(kw);
         auto by_cat = ctx.prod_mgr.getProductsByCategory(cat);
         filtered_products_.clear();
@@ -174,15 +172,15 @@ Element MallPage::render() {
         filler(),
         text("搜索: ") | color(theme::Muted),
         search_input_->Render() | size(WIDTH, EQUAL, 20),
+        text(" "),
         clear_search_btn_->Render()
-    }), cat_toggle_->Focused() || search_input_->Focused());
+    }), cat_toggle_->Focused() || search_input_->Focused(), PanelStyle::SubNav);
 
     Element table_header = hbox({
-        text("  "),
-        col("编号", 8),
-        col("商品名称", 20),
-        col("分类", 11),
-        col("单价", 11),
+        text("   "),
+        col("商品名称", 24),
+        col("分类", 12),
+        col("单价", 12),
         text("库存")
     }) | color(theme::Muted);
 
@@ -193,7 +191,8 @@ Element MallPage::render() {
             separator() | color(theme::Muted),
             product_list_->Render() | flex
         }),
-        product_list_->Focused());
+        product_list_->Focused(),
+        PanelStyle::Primary);
 
     const bool right_focused = qty_dec_btn_->Focused() || qty_inc_btn_->Focused() ||
                                add_cart_btn_->Focused() || go_cart_btn_->Focused() ||
@@ -202,36 +201,46 @@ Element MallPage::render() {
     Element detail_content;
     if (sel) {
         const int in_cart = ctx.cart.getItemQuantity(sel->getId());
+        const auto cust = ctx.user_mgr.getCurrentCustomer();
+        const auto tier = cust ? cust->getTier() : core::UserTier::V0_NORMAL;
+        const auto tcfg = core::getTierConfig(tier);
+        const double member_price = sel->getPrice() * tcfg.discount_rate;
+        const Color stock_color = sel->isOutOfStock()
+            ? theme::Bad
+            : (sel->getStock() <= 5 ? theme::Warn : Color::White);
+
         detail_content = vbox({
-            kv("商品编号:", sel->getId()),
-            kv("商品名称:", text(sel->getName()) | bold | color(Color::White)),
-            kv("所属分类:", sel->getCategoryName()),
-            kv("销售单价:", text(sel->getFormattedPrice()) | bold | color(theme::Good)),
-            kv("当前库存:", text(std::to_string(sel->getStock()) + " 件")
-                            | color(sel->isOutOfStock() ? theme::Bad : Color::White)),
-            kv("购物车已加:", text(std::to_string(in_cart) + " 件")
-                              | bold | color(in_cart > 0 ? theme::Warn : theme::Muted)),
+            kv(" 商品名称:", text(sel->getName()) | bold | color(Color::White)),
+            kv(" 所属分类:", sel->getCategoryName()),
+            kv(" 销售单价:", text(sel->getFormattedPrice()) | bold | color(theme::Good)),
+            kv(" 会员折后:", text(money(member_price) + " (" + tcfg.name + ")")
+                             | bold | color(theme::Warn)),
+            kv(" 当前库存:", text(std::to_string(sel->getStock()) + " 件")
+                             | bold | color(stock_color)),
+            kv(" 购物车已加:", text(std::to_string(in_cart) + " 件")
+                               | bold | color(in_cart > 0 ? theme::Accent : theme::Muted)),
             filler(),
             separator() | color(theme::Muted),
             hbox({
-                text("单次加购数:") | color(theme::Muted),
+                text(" 单次加购数:") | color(theme::Muted),
                 filler(),
                 qty_dec_btn_->Render(),
-                text(" " + std::to_string(add_qty_) + " ") | bold | color(Color::White),
+                text("  " + std::to_string(add_qty_) + "  ") | bold | color(Color::White),
                 qty_inc_btn_->Render()
             }),
-            add_cart_btn_->Render() | hcenter,
+            add_cart_btn_->Render(),
             hbox({
-                go_cart_btn_->Render() | flex,
-                go_coupon_btn_->Render() | flex
-            }) | hcenter
+                go_cart_btn_->Render(),
+                filler(),
+                go_coupon_btn_->Render()
+            })
         }) | flex;
     } else {
-        detail_content = text("未选择商品") | color(theme::Muted);
+        detail_content = text("未选择商品") | color(theme::Muted) | center | flex;
     }
 
-    Element right_box = panel("选中商品详情与加购", std::move(detail_content), right_focused)
-                        | size(WIDTH, EQUAL, 42);
+    Element right_box = panel("选中商品详情与加购", std::move(detail_content), right_focused, PanelStyle::Action)
+                        | size(WIDTH, EQUAL, 44);
 
     Element body = vbox({
         std::move(filter_box),

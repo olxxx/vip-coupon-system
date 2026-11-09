@@ -3,6 +3,8 @@
 #include "ui/pages/CouponSquarePage.hpp"
 #include "ui/pages/MallPage.hpp"
 
+#include <ftxui/dom/linear_gradient.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
@@ -62,7 +64,18 @@ UserCenterPage::UserCenterPage(AppContext& context)
         return "账单流水历史(" + std::to_string(n) + ")";
     }, 2);
 
-    sub_tab_bar_ = Container::Horizontal({sub0_btn, sub1_btn, sub2_btn});
+    auto sub_tab_row = Container::Horizontal({sub0_btn, sub1_btn, sub2_btn});
+    sub_tab_bar_ = Renderer(sub_tab_row, [=] {
+        return hbox({
+            filler(),
+            sub0_btn->Render(),
+            text("   "),
+            sub1_btn->Render(),
+            text("   "),
+            sub2_btn->Render(),
+            filler()
+        });
+    });
 
     // --- Tab 0: 账户充值与修改密码 ---
     quick_100_btn_  = ActionButton("+¥100", [this] { notify(ctx.recharge(100.0)); syncData(); });
@@ -74,7 +87,7 @@ UserCenterPage::UserCenterPage(AppContext& context)
 
     old_pwd_comp_ = TextInput(&old_pwd_input_, "输入原密码", true);
     new_pwd_comp_ = TextInput(&new_pwd_input_, "输入新密码", true, [this] { handleChangePassword(); });
-    change_pwd_btn_ = ActionButton("确认修改密码", [this] { handleChangePassword(); }, true);
+    change_pwd_btn_ = BigActionButton("确认修改密码", [this] { handleChangePassword(); }, ButtonKind::Primary);
 
     auto tab0_container = Container::Vertical({
         Container::Horizontal({quick_100_btn_, quick_500_btn_, quick_1000_btn_}),
@@ -94,11 +107,10 @@ UserCenterPage::UserCenterPage(AppContext& context)
         [this](int idx, bool /*active*/, bool /*focused*/) -> Element {
             const auto& c = shown_coupons_[static_cast<std::size_t>(idx)];
             const bool used = c->isUsed();
-            Element status_el = text(used ? "[已核销] " : "[可使用] ")
+            Element status_el = col(used ? "[已核销]" : "[可使用]", 11)
                                 | bold | color(used ? theme::Muted : theme::Good);
             Element main_el = hbox({
-                col("[" + c->getInstanceId() + "]", 13) | color(theme::Muted),
-                col(c->getName(), 20) | (used ? color(theme::Muted) : bold),
+                col(c->getName(), 22) | (used ? color(theme::Muted) : bold),
                 text(c->getRuleDescription()) | color(used ? theme::Muted : Color::GrayLight)
             });
             if (used) {
@@ -110,8 +122,8 @@ UserCenterPage::UserCenterPage(AppContext& context)
             syncData();
             if (!shown_coupons_.empty()) {
                 const auto& c = shown_coupons_[static_cast<std::size_t>(cpn_selected_)];
-                setStatus("已选中卡券 [" + c->getInstanceId() + "] " + c->getName() +
-                          "，按 Del/D 可直接移除，或按 → 进入右侧操作区。", false);
+                setStatus("已选中卡券「" + c->getName() +
+                          "」，按 Del/D 可直接移除，或按 → 进入右侧操作区。", false);
             }
         },
         "当前筛选下暂无优惠券。可点击右侧「去领券中心」免费申领。");
@@ -119,9 +131,9 @@ UserCenterPage::UserCenterPage(AppContext& context)
     del_cpn_btn_    = DangerButton("删除选中卡券(Del)", [this] { handleRemoveSelectedCoupon(); });
     clean_used_btn_ = ActionButton("清理已核销券(C)", [this] { handleCleanUsedCoupons(); });
     clear_cpn_btn_  = DangerButton("清空全部卡券", [this] { handleClearAllCoupons(); });
-    go_coupon_btn_  = ActionButton("去领券中心", [this] {
+    go_coupon_btn_  = BigActionButton("去领券中心", [this] {
         pending_action = PageAction::push(std::make_unique<CouponSquarePage>(ctx));
-    }, true);
+    }, ButtonKind::Primary);
 
     auto cpn_right_ops = Container::Vertical({
         Container::Horizontal({del_cpn_btn_, clean_used_btn_}),
@@ -159,7 +171,7 @@ UserCenterPage::UserCenterPage(AppContext& context)
             if (!shown_txs_.empty()) {
                 const auto* tx = shown_txs_[static_cast<std::size_t>(tx_selected_)];
                 if (tx) {
-                    setStatus("已选中流水单号: " + tx->getRecordId() + "，右侧面板可查看完整交易凭证。", false);
+                    setStatus("已选中流水记录，右侧面板可查看完整交易凭证。", false);
                 }
             }
         },
@@ -347,7 +359,7 @@ bool UserCenterPage::handle_event(Event event, PageAction& out_action) {
 }
 
 Element UserCenterPage::renderSubTabBar() {
-    return panel("个人中心模块切换", sub_tab_bar_->Render(), sub_tab_bar_->Focused());
+    return panel("个人中心模块切换", sub_tab_bar_->Render(), sub_tab_bar_->Focused(), PanelStyle::SubNav);
 }
 
 Element UserCenterPage::renderAccountTab() {
@@ -369,12 +381,14 @@ Element UserCenterPage::renderAccountTab() {
 
     Elements ladder_rows;
     ladder_rows.push_back(hbox({
+        text(" "),
         col("等级", 6),
         col("称号", 12),
         col("累计消费门槛", 16),
         col("专享折扣", 14),
         text("状态")
     }) | color(theme::Muted));
+    ladder_rows.push_back(separator() | color(theme::Muted));
 
     for (int v = 0; v <= 5; ++v) {
         const auto vt = static_cast<core::UserTier>(v);
@@ -386,6 +400,7 @@ Element UserCenterPage::renderAccountTab() {
             : (reached ? (text("✓ 已达成") | color(theme::Good))
                        : (text("未解锁") | color(theme::Muted)));
         Element row = hbox({
+            text(" "),
             col("V" + std::to_string(v), 6) | color(is_cur ? theme::Warn : Color::GrayLight),
             col(cfg.name, 12) | (is_cur ? (bold | color(theme::Warn)) : nothing),
             col(money(cfg.upgrade_threshold), 16),
@@ -395,22 +410,26 @@ Element UserCenterPage::renderAccountTab() {
         ladder_rows.push_back(std::move(row));
     }
 
+    Element grad_gauge = gauge(static_cast<float>(progress))
+                         | color(LinearGradient().Angle(0).Stop(theme::Accent).Stop(theme::Good))
+                         | flex;
+
     Element left_panel = panel(
         "会员成长进度与等级权益阶梯",
         vbox({
             hbox({
-                text("当前等级: ") | color(theme::Muted),
+                text(" 当前等级: ") | color(theme::Muted),
                 text(tierCodeStr(tier) + " " + tcfg.name + " (" + rateText(tcfg.discount_rate) + ")")
                     | bold | color(theme::Warn),
                 filler(),
                 text("累计消费: ") | color(theme::Muted),
                 text(money(cust->getTotalSpent())) | bold | color(Color::White)
             }),
-            text(next_hint) | color(Color::GrayLight),
+            text(" " + next_hint) | color(Color::GrayLight),
             hbox({
-                text("成长进度: ") | color(theme::Accent),
+                text(" 成长进度: ") | color(theme::Accent),
                 dbox({
-                    gauge(static_cast<float>(progress)) | color(theme::Accent) | flex,
+                    std::move(grad_gauge),
                     text(" " + std::to_string(pct) + "% ") | bold | color(Color::White) | center
                 }) | flex
             }),
@@ -418,7 +437,8 @@ Element UserCenterPage::renderAccountTab() {
             text(" 会员等级权益阶梯一览:") | bold | color(Color::GrayLight),
             vbox(std::move(ladder_rows)) | flex
         }),
-        false);
+        false,
+        PanelStyle::Highlight);
 
     const bool recharge_focused = quick_100_btn_->Focused() || quick_500_btn_->Focused() ||
                                   quick_1000_btn_->Focused() || custom_input_->Focused() ||
@@ -427,43 +447,46 @@ Element UserCenterPage::renderAccountTab() {
     Element recharge_panel = panel(
         "账户余额充值",
         vbox({
-            kv("当前可用余额:", text(money(cust->getBalance())) | bold | color(theme::Good)),
+            kv(" 当前可用余额:", text(money(cust->getBalance())) | bold | color(theme::Good)),
             separator() | color(theme::Muted),
             hbox({
-                text("快捷面额: ") | color(theme::Muted),
+                text(" 快捷面额: ") | color(theme::Muted),
                 quick_100_btn_->Render(),
-                text(" "),
+                text("  "),
                 quick_500_btn_->Render(),
-                text(" "),
+                text("  "),
                 quick_1000_btn_->Render()
             }),
             hbox({
-                text("自定义额: ") | color(theme::Muted),
-                custom_input_->Render() | size(WIDTH, EQUAL, 16),
+                text(" 自定义额: ") | color(theme::Muted),
+                custom_input_->Render() | size(WIDTH, EQUAL, 18),
                 filler(),
                 confirm_recharge_btn_->Render()
             })
         }),
-        recharge_focused);
+        recharge_focused,
+        PanelStyle::Action);
 
     const bool pwd_focused = old_pwd_comp_->Focused() || new_pwd_comp_->Focused() || change_pwd_btn_->Focused();
 
     Element pwd_panel = panel(
         "账户安全与登录密码修改",
         vbox({
-            kv("当前登录账号:", text(cust->getUsername() + " (注册于 " + cust->getCreatedAt() + ")") | bold | color(Color::White)),
+            kv(" 当前登录账号:", text(cust->getUsername() + " (注册于 " + cust->getCreatedAt() + ")")
+                                 | bold | color(Color::White)),
             hbox({
-                text("原密码: ") | color(theme::Muted),
+                text(" 原密码: ") | color(theme::Muted),
                 old_pwd_comp_->Render() | flex
             }),
             hbox({
-                text("新密码: ") | color(theme::Muted),
+                text(" 新密码: ") | color(theme::Muted),
                 new_pwd_comp_->Render() | flex
             }),
             filler(),
-            change_pwd_btn_->Render() | hcenter
+            change_pwd_btn_->Render()
         }) | flex,
-        pwd_focused);
+        pwd_focused,
+        PanelStyle::Action);
 
     return hbox({
         std::move(left_panel) | flex,
@@ -481,13 +504,12 @@ Element UserCenterPage::renderCouponBagTab() {
         cpn_filter_toggle_->Render(),
         filler(),
         text("提示: 按 Del/D 删除选中券，按 C 清理已核销券 ") | color(theme::Muted)
-    }), cpn_filter_toggle_->Focused());
+    }), cpn_filter_toggle_->Focused(), PanelStyle::SubNav);
 
     Element table_header = hbox({
         text("  "),
-        col("状态", 10),
-        col("实例编号", 13),
-        col("券面名称", 20),
+        col("状态", 11),
+        col("券面名称", 22),
         text("抵扣规则")
     }) | color(theme::Muted);
 
@@ -498,7 +520,8 @@ Element UserCenterPage::renderCouponBagTab() {
             separator() | color(theme::Muted),
             cpn_list_->Render() | flex
         }),
-        cpn_list_->Focused());
+        cpn_list_->Focused(),
+        PanelStyle::Primary);
 
     const bool right_focused = del_cpn_btn_->Focused() || clean_used_btn_->Focused() ||
                                clear_cpn_btn_->Focused() || go_coupon_btn_->Focused();
@@ -509,18 +532,16 @@ Element UserCenterPage::renderCouponBagTab() {
         const auto& sel = shown_coupons_[static_cast<std::size_t>(cpn_selected_)];
         const bool tier_ok = cust && (cust->getTier() >= sel->getMinTier());
         detail_box = vbox({
-            kv("实例编号:", sel->getInstanceId()),
-            kv("模板编号:", sel->getTemplateId()),
-            kv("券面名称:", text(sel->getName()) | bold | color(Color::White)),
-            kv("券种类型:", sel->getTypeDescription()),
-            kv("抵扣规则:", text(sel->getRuleDescription()) | bold | color(theme::Warn)),
+            kv(" 券面名称:", text(sel->getName()) | bold | color(Color::White)),
+            kv(" 券种类型:", sel->getTypeDescription()),
+            kv(" 抵扣规则:", text(sel->getRuleDescription()) | bold | color(theme::Warn)),
             separator() | color(theme::Muted),
-            kv("适用品类:", core::getCategoryName(sel->getTargetCategory())),
-            kv("最低等级:", text(core::getTierConfig(sel->getMinTier()).name +
+            kv(" 适用品类:", core::getCategoryName(sel->getTargetCategory())),
+            kv(" 最低等级:", text(core::getTierConfig(sel->getMinTier()).name +
                                  (tier_ok ? " (已达标)" : " (未达标)"))
                             | color(tier_ok ? theme::Good : theme::Bad)),
-            kv("时间限制:", timeLimitText(sel->getTimeConstraint())),
-            kv("当前状态:", text(sel->isUsed() ? "已核销 (不可再用)" : "可使用")
+            kv(" 时间限制:", timeLimitText(sel->getTimeConstraint())),
+            kv(" 当前状态:", text(sel->isUsed() ? "已核销 (不可再用)" : "可使用")
                             | bold | color(sel->isUsed() ? theme::Muted : theme::Good))
         });
     } else {
@@ -538,9 +559,11 @@ Element UserCenterPage::renderCouponBagTab() {
             separator() | color(theme::Muted),
             text(" 卡券清理与删除操作:") | bold | color(Color::GrayLight),
             hbox({del_cpn_btn_->Render(), filler(), clean_used_btn_->Render()}),
-            hbox({clear_cpn_btn_->Render(), filler(), go_coupon_btn_->Render()})
+            hbox({clear_cpn_btn_->Render(), filler()}),
+            go_coupon_btn_->Render()
         }) | flex,
-        right_focused) | size(WIDTH, EQUAL, 48);
+        right_focused,
+        PanelStyle::Action) | size(WIDTH, EQUAL, 48);
 
     return vbox({
         std::move(filter_box),
@@ -552,12 +575,13 @@ Element UserCenterPage::renderTransactionTab() {
     Element filter_box = panel("账单流水类型筛选", hbox({
         tx_filter_toggle_->Render(),
         filler()
-    }), tx_filter_toggle_->Focused());
+    }), tx_filter_toggle_->Focused(), PanelStyle::SubNav);
 
     Element left_box = panel(
         "多态交易流水列表",
         tx_list_->Render() | flex,
-        tx_list_->Focused());
+        tx_list_->Focused(),
+        PanelStyle::Primary);
 
     const bool right_focused = go_mall_btn_->Focused() || go_cart_btn_->Focused();
 
@@ -567,26 +591,23 @@ Element UserCenterPage::renderTransactionTab() {
         const auto* tx = shown_txs_[static_cast<std::size_t>(tx_selected_)];
         Elements extra_rows;
         if (const auto* rec = dynamic_cast<const user::RechargeRecord*>(tx)) {
-            extra_rows.push_back(kv("充值渠道:", text(rec->getChannel()) | color(theme::Good)));
-            extra_rows.push_back(kv("收支方向:", text("账户资金转入 (+)") | color(theme::Good)));
+            extra_rows.push_back(kv(" 充值渠道:", text(rec->getChannel()) | color(theme::Good)));
+            extra_rows.push_back(kv(" 收支方向:", text("账户资金转入 (+)") | color(theme::Good)));
         } else if (const auto* exp = dynamic_cast<const user::ExpenseRecord*>(tx)) {
-            extra_rows.push_back(kv("关联订单号:", text(exp->getOrderId()) | bold | color(theme::Accent)));
-            extra_rows.push_back(kv("消费摘要:", exp->getDescription()));
-            extra_rows.push_back(kv("收支方向:", text("订单结算支出 (-)") | color(theme::Warn)));
+            extra_rows.push_back(kv(" 消费摘要:", exp->getDescription()));
+            extra_rows.push_back(kv(" 收支方向:", text("订单结算支出 (-)") | color(theme::Warn)));
         } else if (const auto* pur = dynamic_cast<const user::PurchaseCouponRecord*>(tx)) {
-            extra_rows.push_back(kv("券模板编号:", pur->getTemplateId()));
-            extra_rows.push_back(kv("所购卡券名:", text(pur->getCouponName()) | bold | color(theme::Accent)));
-            extra_rows.push_back(kv("收支方向:", text("付费购券支出 (-)") | color(theme::Warn)));
+            extra_rows.push_back(kv(" 所购卡券名:", text(pur->getCouponName()) | bold | color(theme::Accent)));
+            extra_rows.push_back(kv(" 收支方向:", text("付费购券支出 (-)") | color(theme::Warn)));
         } else if (const auto* upg = dynamic_cast<const user::UpgradeRecord*>(tx)) {
-            extra_rows.push_back(kv("变更前等级:", upg->getOldTierName()));
-            extra_rows.push_back(kv("变更后等级:", text(upg->getNewTierName()) | bold | color(theme::Warn)));
+            extra_rows.push_back(kv(" 变更前等级:", upg->getOldTierName()));
+            extra_rows.push_back(kv(" 变更后等级:", text(upg->getNewTierName()) | bold | color(theme::Warn)));
         }
 
         detail_content = vbox({
-            kv("流水凭证号:", text(tx->getRecordId()) | bold | color(Color::White)),
-            kv("交易类型:", text(tx->getTypeName()) | bold | color(theme::Accent)),
-            kv("发生时间:", tx->getTimestamp()),
-            kv("变动金额:", text(money(tx->getAmount())) | bold | color(theme::Good)),
+            kv(" 交易类型:", text(tx->getTypeName()) | bold | color(theme::Accent)),
+            kv(" 发生时间:", tx->getTimestamp()),
+            kv(" 变动金额:", text(money(tx->getAmount())) | bold | color(theme::Good)),
             separator() | color(theme::Muted),
             vbox(std::move(extra_rows))
         });
@@ -602,7 +623,8 @@ Element UserCenterPage::renderTransactionTab() {
             separator() | color(theme::Muted),
             hbox({go_mall_btn_->Render(), filler(), go_cart_btn_->Render()})
         }) | flex,
-        right_focused) | size(WIDTH, EQUAL, 48);
+        right_focused,
+        PanelStyle::Action) | size(WIDTH, EQUAL, 48);
 
     return vbox({
         std::move(filter_box),

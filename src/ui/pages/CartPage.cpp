@@ -21,10 +21,9 @@ CartPage::CartPage(AppContext& context)
             return hbox({
                 text(" "),
                 col(std::to_string(idx + 1), 4) | color(theme::Muted),
-                col(it.getProductId(), 8) | color(theme::Muted),
-                col(it.getProductName(), 18),
-                col(money(it.getProductPrice()), 11),
-                col("x" + std::to_string(it.quantity), 7) | color(theme::Warn),
+                col(it.getProductName(), 22),
+                col(money(it.getProductPrice()), 12),
+                col("x" + std::to_string(it.quantity), 8) | color(theme::Warn),
                 text(money(it.getSubtotal())) | bold | color(theme::Good)
             });
         },
@@ -38,15 +37,15 @@ CartPage::CartPage(AppContext& context)
         },
         "购物车当前为空。请点击右侧「继续选购商品」 或按 Esc 返回商城。");
 
-    inc_btn_      = ActionButton("数量 +1", [this] { modifySelectedQty(1); });
-    dec_btn_      = ActionButton("数量 -1", [this] { modifySelectedQty(-1); });
+    dec_btn_      = ActionButton("-", [this] { modifySelectedQty(-1); });
+    inc_btn_      = ActionButton("+", [this] { modifySelectedQty(1); });
     qty_input_    = TextInput(&custom_qty_, "数量", false, [this] { applyCustomQty(); });
     set_qty_btn_  = ActionButton("设定", [this] { applyCustomQty(); }, true);
 
     remove_btn_   = DangerButton("移除选中项(Del)", [this] { removeSelected(); });
     clear_btn_    = DangerButton("清空购物车(C)", [this] { clearAll(); });
 
-    checkout_btn_ = ActionButton("  前往收银台算券结算  ", [this] { enterCheckout(); }, true);
+    checkout_btn_ = BigActionButton("前往收银台算券结算", [this] { enterCheckout(); }, ButtonKind::Primary);
     go_coupon_btn_ = ActionButton("去领券中心", [this] {
         pending_action = PageAction::push(std::make_unique<CouponSquarePage>(ctx));
     });
@@ -54,7 +53,7 @@ CartPage::CartPage(AppContext& context)
         pending_action = PageAction::push(std::make_unique<MallPage>(ctx));
     });
 
-    auto ops_row1 = Container::Horizontal({inc_btn_, dec_btn_, qty_input_, set_qty_btn_});
+    auto ops_row1 = Container::Horizontal({dec_btn_, inc_btn_, qty_input_, set_qty_btn_});
     auto ops_row2 = Container::Horizontal({remove_btn_, clear_btn_});
     auto nav_row  = Container::Horizontal({go_coupon_btn_, go_mall_btn_});
     auto right_controls = Container::Vertical({ops_row1, ops_row2, checkout_btn_, nav_row});
@@ -182,10 +181,9 @@ Element CartPage::render() {
     Element table_header = hbox({
         text("  "),
         col("#", 4),
-        col("编号", 8),
-        col("商品名称", 18),
-        col("单价", 11),
-        col("数量", 7),
+        col("商品名称", 22),
+        col("单价", 12),
+        col("数量", 8),
         text("小计")
     }) | color(theme::Muted);
 
@@ -196,7 +194,8 @@ Element CartPage::render() {
             separator() | color(theme::Muted),
             cart_list_->Render() | flex
         }),
-        cart_list_->Focused());
+        cart_list_->Focused(),
+        PanelStyle::Primary);
 
     const bool right_focused = inc_btn_->Focused() || dec_btn_->Focused() ||
                                qty_input_->Focused() || set_qty_btn_->Focused() ||
@@ -205,17 +204,14 @@ Element CartPage::render() {
                                go_mall_btn_->Focused();
 
     Element sel_summary;
+    int cur_sel_qty = 0;
     if (!items_.empty()) {
         const auto& sel = items_[static_cast<std::size_t>(selected_idx_)];
+        cur_sel_qty = sel.quantity;
         sel_summary = vbox({
-            kv("当前选中:", text("[" + sel.getProductId() + "] " + sel.getProductName())
-                            | bold | color(theme::Accent)),
-            kv("单价 / 库存:",
-               hbox({
-                   text(money(sel.getProductPrice())) | color(Color::White),
-                   text("  (库存 " + std::to_string(sel.getProductStock()) + " 件)") | color(theme::Muted)
-               })),
-            kv("数量 / 小计:",
+            kv(" 当前选中:", text(sel.getProductName()) | bold | color(theme::Accent)),
+            kv(" 商品单价:", text(money(sel.getProductPrice())) | color(Color::White)),
+            kv(" 数量 / 小计:",
                hbox({
                    text("x" + std::to_string(sel.quantity) + " 件") | bold | color(theme::Warn),
                    text("  =  "),
@@ -227,15 +223,16 @@ Element CartPage::render() {
     }
 
     Element item_ops_box = vbox({
-        text(" ① 选中商品数量与移除操作") | bold | color(Color::GrayLight),
+        sectionHeader("选中商品操控", theme::Accent),
         std::move(sel_summary),
         hbox({
-            inc_btn_->Render(),
-            text(" "),
+            text(" 数量步进: ") | color(theme::Muted),
             dec_btn_->Render(),
+            text(" " + std::to_string(cur_sel_qty) + " ") | bold | color(Color::White),
+            inc_btn_->Render(),
             filler(),
-            text("设数量:") | color(theme::Muted),
-            qty_input_->Render() | size(WIDTH, EQUAL, 7),
+            text("直设:") | color(theme::Muted),
+            qty_input_->Render() | size(WIDTH, EQUAL, 6),
             text(" "),
             set_qty_btn_->Render()
         }),
@@ -246,6 +243,7 @@ Element CartPage::render() {
         })
     });
 
+    const double total_orig = ctx.cart.getTotalOriginalAmount();
     Elements cat_rows;
     const core::ProductCategory cats[] = {
         core::ProductCategory::DIGITAL,
@@ -264,7 +262,12 @@ Element CartPage::render() {
         cat_rows.push_back(text(" 暂无加购商品") | color(theme::Muted));
     }
 
-    const std::string summary_label = "原价总额 (" +
+    const auto cust = ctx.user_mgr.getCurrentCustomer();
+    const auto tier = cust ? cust->getTier() : core::UserTier::V0_NORMAL;
+    const auto tcfg = core::getTierConfig(tier);
+    const double est_member_pay = total_orig * tcfg.discount_rate;
+
+    const std::string summary_label = " 原价总额 (" +
         std::to_string(ctx.cart.getDistinctCount()) + "种/" +
         std::to_string(ctx.cart.getTotalQuantity()) + "件):";
 
@@ -273,17 +276,22 @@ Element CartPage::render() {
         vbox({
             std::move(item_ops_box),
             separator() | color(theme::Muted),
-            text(" ② 分品类金额统计") | bold | color(Color::GrayLight),
+            sectionHeader("分品类金额统计", theme::Good),
             vbox(std::move(cat_rows)),
-            kv(summary_label,
-               text(money(ctx.cart.getTotalOriginalAmount())) | bold | color(theme::Good)),
+            kv(summary_label, text(money(total_orig)) | bold | color(theme::Good)),
+            kv(" 会员折后预估 (" + tcfg.name + "):",
+               text(money(est_member_pay)) | bold | color(theme::Warn)),
             filler(),
             separator() | color(theme::Muted),
-            text(" ③ 算券结算与页面导航") | bold | color(Color::GrayLight),
-            checkout_btn_->Render() | hcenter,
-            hbox({go_coupon_btn_->Render(), text("  "), go_mall_btn_->Render()}) | hcenter
+            checkout_btn_->Render(),
+            hbox({
+                go_coupon_btn_->Render(),
+                filler(),
+                go_mall_btn_->Render()
+            })
         }) | flex,
-        right_focused) | size(WIDTH, EQUAL, 48);
+        right_focused,
+        PanelStyle::Action) | size(WIDTH, EQUAL, 48);
 
     return renderCustomerFrame(
         nav_bar_,

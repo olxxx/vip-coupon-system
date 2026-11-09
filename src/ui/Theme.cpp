@@ -8,13 +8,47 @@ namespace ui {
 
 using namespace ftxui;
 
-Element panel(const std::string& title, Element body, bool focused) {
+Element panel(const std::string& title, Element body, bool focused, PanelStyle style) {
+    Color focus_color = theme::Accent;
+    std::string icon = " ◆ ";
+
+    switch (style) {
+        case PanelStyle::Primary:
+            focus_color = theme::Accent;
+            icon = " ◆ ";
+            break;
+        case PanelStyle::Header:
+            focus_color = theme::Accent;
+            icon = " ❖ ";
+            break;
+        case PanelStyle::SubNav:
+            focus_color = theme::Accent;
+            icon = " ◈ ";
+            break;
+        case PanelStyle::Action:
+            focus_color = theme::Good;
+            icon = " ✦ ";
+            break;
+        case PanelStyle::Highlight:
+            focus_color = theme::Warn;
+            icon = " ★ ";
+            break;
+    }
+
     Element title_el = focused
-        ? (text(" ◆ " + title + " ") | bold | color(theme::Accent))
+        ? (text(icon + title + " ") | bold | color(focus_color))
         : (text(" " + title + " ") | color(Color::GrayLight));
     Element content = std::move(body) | color(Color::White);
     return window(std::move(title_el), std::move(content), ROUNDED)
-           | color(focused ? theme::Accent : theme::Muted);
+           | color(focused ? focus_color : theme::Muted);
+}
+
+Element sectionHeader(const std::string& title, Color bar_color) {
+    return hbox({
+        text(" ▎ ") | bold | color(bar_color),
+        text(title) | bold | color(Color::White),
+        filler()
+    });
 }
 
 Element col(Element el, int width, bool align_right) {
@@ -74,7 +108,7 @@ ButtonPalette paletteOf(ButtonKind kind) {
     switch (kind) {
         case ButtonKind::Primary:   return {theme::Accent, theme::Accent, true};
         case ButtonKind::Danger:    return {theme::Bad, theme::Bad, true};
-        case ButtonKind::Link:      return {theme::Accent, Color::White, false};
+        case ButtonKind::Link:      return {theme::Accent, Color::White, true};
         case ButtonKind::Tab:       return {Color::GrayLight, Color::White, false};
         case ButtonKind::TabActive: return {Color::White, Color::White, true};
         case ButtonKind::Disabled:  return {theme::Muted, theme::Muted, false};
@@ -134,6 +168,67 @@ public:
                 return true;
             }
             return false; // 悬停只更新外观，不抢焦点、不吞事件
+        }
+        if (event == Event::Return || event == Event::Character(' ')) {
+            if (on_click_) on_click_();
+            return true;
+        }
+        return false;
+    }
+
+    bool Focusable() const override { return true; }
+
+private:
+    std::function<std::string()> label_;
+    std::function<void()> on_click_;
+    std::function<ButtonKind()> kind_;
+    Box box_;
+    bool hovered_ = false;
+};
+
+// ---------------------------------------------------------------------------
+//  大号醒目主操作按钮（复刻原版登录按钮：外层圆角框 + 居中胶囊悬停/选中高亮效果）
+// ---------------------------------------------------------------------------
+class StyledBigButtonComponent : public ComponentBase {
+public:
+    StyledBigButtonComponent(std::function<std::string()> label,
+                             std::function<void()> on_click,
+                             std::function<ButtonKind()> kind)
+        : label_(std::move(label)), on_click_(std::move(on_click)), kind_(std::move(kind)) {}
+
+    Element OnRender() override {
+        const ButtonKind kind = kind_ ? kind_() : ButtonKind::Primary;
+        const ButtonPalette pal = paletteOf(kind);
+        const std::string raw = label_ ? label_() : std::string();
+
+        Element inner = text("[  " + raw + "  ]");
+        if (Focused()) {
+            inner = std::move(inner) | bold | color(pal.fg) | bgcolor(theme::CursorBg) | underlined;
+        } else {
+            inner = std::move(inner) | color(pal.fg);
+            if (pal.bold_fg) inner = std::move(inner) | bold;
+            if (hovered_ && kind != ButtonKind::Disabled) {
+                inner = std::move(inner) | bgcolor(theme::CursorBg) | underlined;
+            } else {
+                inner = std::move(inner) | bgcolor(theme::BadgeBg);
+            }
+        }
+
+        const Color border_c = (kind == ButtonKind::Disabled) ? theme::Muted : pal.fg;
+        return (std::move(inner) | center)
+               | borderStyled(ROUNDED, border_c)
+               | reflect(box_);
+    }
+
+    bool OnEvent(Event event) override {
+        if (event.is_mouse()) {
+            hovered_ = box_.Contain(event.mouse().x, event.mouse().y);
+            if (hovered_ && isLeftPress(event)) {
+                TakeFocus();
+                if (on_click_) on_click_();
+                return true;
+            }
+            return false;
         }
         if (event == Event::Return || event == Event::Character(' ')) {
             if (on_click_) on_click_();
@@ -457,6 +552,21 @@ Component DangerButton(const std::string& label,
         [label] { return label; },
         std::move(on_click),
         [] { return ButtonKind::Danger; });
+}
+
+Component StyledBigButton(std::function<std::string()> label,
+                          std::function<void()> on_click,
+                          std::function<ButtonKind()> kind) {
+    return Make<StyledBigButtonComponent>(std::move(label), std::move(on_click), std::move(kind));
+}
+
+Component BigActionButton(const std::string& label,
+                          std::function<void()> on_click,
+                          ButtonKind kind) {
+    return StyledBigButton(
+        [label] { return label; },
+        std::move(on_click),
+        [kind] { return kind; });
 }
 
 Component TextInput(std::string* value,
