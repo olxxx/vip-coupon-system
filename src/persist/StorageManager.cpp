@@ -203,7 +203,7 @@ void StorageManager::seedDefaultData(user::UserManager& user_mgr,
 
     // 默认测试消费者：余额 2000.0
     auto demo_user = std::make_shared<user::CustomerAccount>(
-        "demo", "123456", core::getCurrentTimestamp(), 2000.0
+        "demo", user::Account::hashPassword("123456"), core::getCurrentTimestamp(), 2000.0
     );
     demo_user->addTransaction(std::make_unique<user::RechargeRecord>(
         user::TransactionRecord::generateId("RECHARGE"),
@@ -215,7 +215,7 @@ void StorageManager::seedDefaultData(user::UserManager& user_mgr,
 
     // 预设白银会员消费者 alice：余额 1200.0，累计消费 950.0，等级 V2_SILVER
     auto alice_user = std::make_shared<user::CustomerAccount>(
-        "alice", "123456", "2026-10-25 14:00:00", 1200.0, 950.0, core::UserTier::V2_SILVER
+        "alice", user::Account::hashPassword("123456"), "2026-10-25 14:00:00", 1200.0, 950.0, core::UserTier::V2_SILVER
     );
     alice_user->addCoupon(std::make_shared<shop::ThresholdCoupon>(
         "TPL_THRESHOLD_200_30", "全场畅选满200减30", 0.0, 200.0,

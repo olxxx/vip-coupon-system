@@ -1,4 +1,4 @@
-﻿#include "user/UserManager.hpp"
+#include "user/UserManager.hpp"
 
 #include <algorithm>
 #include <exception>
@@ -82,7 +82,7 @@ namespace user {
 
         auto customer = std::make_shared<CustomerAccount>(
             username,
-            password,
+            Account::hashPassword(password),
             core::getCurrentTimestamp()
         );
 
@@ -110,7 +110,7 @@ namespace user {
 
         auto admin = std::make_shared<AdminAccount>(
             username,
-            password,
+            Account::hashPassword(password),
             core::getCurrentTimestamp(),
             role
         );

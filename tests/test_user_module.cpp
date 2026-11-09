@@ -1,4 +1,4 @@
-﻿#include "coupon/ConcreteCoupons.hpp"
+#include "coupon/ConcreteCoupons.hpp"
 #include "user/UserManager.hpp"
 
 #include <cassert>
@@ -83,6 +83,20 @@ int main() {
         );
 
         manager.logout();
+        // 校验 PicoSHA2 哈希与密码鉴权
+        auto alice = manager.findCustomer("alice");
+        assert(alice != nullptr);
+        assert(alice->getPasswordHash() != "123456");
+        assert(alice->getPasswordHash().length() == 64);
+        assert(alice->getPasswordHash() == user::Account::hashPassword("123456"));
+        assert(alice->verifyPassword("123456"));
+        assert(!alice->verifyPassword("wrong"));
+
+        // 校验修改密码与重新鉴权
+        alice->setPassword("654321");
+        assert(alice->getPasswordHash() == user::Account::hashPassword("654321"));
+        assert(alice->verifyPassword("654321"));
+        assert(!alice->verifyPassword("123456"));
         assert(!manager.isLoggedIn());
         assert(manager.getCurrentUsername().empty());
 
