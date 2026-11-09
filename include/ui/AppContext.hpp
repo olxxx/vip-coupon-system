@@ -75,18 +75,22 @@ struct AppContext {
     core::Result loginCustomer(const std::string& username, const std::string& password);
     core::Result loginAdmin(const std::string& username, const std::string& password);
     core::Result registerCustomer(const std::string& username, const std::string& password);
+    core::Result changePassword(const std::string& old_password, const std::string& new_password);
     void logout();
 
     // --- 消费者前台业务编排 ---
     core::Result addToCart(const std::string& product_id, int quantity = 1);
     core::Result changeCartQty(const std::string& product_id, int delta);
+    core::Result setCartQty(const std::string& product_id, int quantity);
     core::Result removeCartItem(const std::string& product_id);
     core::Result clearCart();
 
     core::Result recharge(double amount, const std::string& channel = "个人中心充值");
     core::Result claimOrBuyCoupon(const std::string& template_id);
     core::Result claimAllFreeCoupons();
+    core::Result removeUserCoupon(const std::string& instance_id);
     core::Result cleanUsedCoupons();
+    core::Result clearAllCoupons();
 
     // 结算报价与原子支付
     shop::PlanResult computeQuote(const std::shared_ptr<shop::Coupon>& manual_coupon,
@@ -97,8 +101,11 @@ struct AppContext {
 
     // --- 管理员后台业务编排 (内建 RBAC 权限校验) ---
     core::Result replenishProduct(const std::string& id, int count);
+    core::Result deductProduct(const std::string& id, int count);
     core::Result setProductStock(const std::string& id, int stock);
     core::Result updateProductPrice(const std::string& id, double price);
+    core::Result updateProductName(const std::string& id, const std::string& new_name);
+    core::Result updateProductCategory(const std::string& id, core::ProductCategory new_category);
     core::Result removeProduct(const std::string& id);
     core::Result addProduct(const std::string& id,
                             const std::string& name,
@@ -110,7 +117,15 @@ struct AppContext {
     core::Result removeCoupon(const std::string& template_id);
 
     core::Result updateCustomerTier(const std::string& username, core::UserTier new_tier);
+    core::Result setCustomerBalance(const std::string& username, double new_balance);
     core::Result removeCustomer(const std::string& username);
+
+    core::Result registerAdmin(const std::string& username,
+                               const std::string& password,
+                               core::AdminRole role);
+    core::Result updateAdminRole(const std::string& username, core::AdminRole new_role);
+    core::Result removeAdmin(const std::string& username);
+
     core::Result resetSystem();
 
 private:

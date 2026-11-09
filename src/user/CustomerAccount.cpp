@@ -1,4 +1,4 @@
-﻿#include "user/CustomerAccount.hpp"
+#include "user/CustomerAccount.hpp"
 
 #include "persist/JsonFactories.hpp"
 
@@ -335,7 +335,29 @@ namespace user {
         return true;
     }//把用户背包中的一张优惠券标记为已使用。(核销)
 
+    bool CustomerAccount::removeCoupon(
+        const std::string& instance_id
+    ) {
+        if (instance_id.empty()) {
+            return false;
+        }
 
+        const auto it = std::find_if(
+            coupons.begin(),
+            coupons.end(),
+            [&instance_id](const auto& coupon) {
+                return coupon
+                    && coupon->getInstanceId() == instance_id;
+            }
+        );
+
+        if (it == coupons.end()) {
+            return false;
+        }
+
+        coupons.erase(it);
+        return true;
+    }//从用户背包中移除指定实例优惠券
 
     bool CustomerAccount::hasCoupon(
         const std::string& instance_id

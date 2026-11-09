@@ -16,6 +16,8 @@ private:
     int prod_idx_ = 0;
     std::string stock_val_ = "20";
     std::string price_mod_ = "399.00";
+    std::string name_mod_;
+    int mod_cat_ = 0; // 0..4 对应 DIGITAL..OTHER
     int new_cat_ = 0; // 0..4 对应 DIGITAL..OTHER
     std::string new_id_ = "P1004";
     std::string new_name_ = "无线鼠标";
@@ -42,11 +44,18 @@ private:
     std::vector<std::string> c_time_labels_;
     std::vector<std::shared_ptr<shop::Coupon>> coupons_;
 
-    // Tab 2: 用户管理状态
+    // Tab 2: 用户与管理员管理状态
     int user_idx_ = 0;
     int target_tier_ = 2;
+    std::string user_bal_mod_ = "1000";
+    int admin_idx_ = 0;
+    int admin_role_sel_ = 0; // 0: STAFF, 1: SUPER_ADMIN
+    std::string new_adm_user_;
+    std::string new_adm_pwd_;
     std::vector<std::string> user_tier_labels_;
+    std::vector<std::string> admin_role_labels_;
     std::vector<std::shared_ptr<user::CustomerAccount>> customers_;
+    std::vector<std::shared_ptr<user::AdminAccount>> admins_;
 
     // 顶栏与各 Tab 组件
     ftxui::Component top_bar_;
@@ -56,10 +65,15 @@ private:
     ftxui::Component prod_list_;
     ftxui::Component stock_input_;
     ftxui::Component replenish_btn_;
+    ftxui::Component deduct_btn_;
     ftxui::Component set_stock_btn_;
     ftxui::Component del_prod_btn_;
     ftxui::Component price_input_;
     ftxui::Component mod_price_btn_;
+    ftxui::Component name_mod_input_;
+    ftxui::Component mod_name_btn_;
+    ftxui::Component mod_cat_toggle_;
+    ftxui::Component mod_cat_btn_;
     ftxui::Component new_cat_toggle_;
     ftxui::Component new_id_input_;
     ftxui::Component new_name_input_;
@@ -84,9 +98,18 @@ private:
 
     // Tab 2 组件
     ftxui::Component user_list_;
+    ftxui::Component admin_list_;
     ftxui::Component target_tier_toggle_;
     ftxui::Component mod_tier_btn_;
+    ftxui::Component user_bal_input_;
+    ftxui::Component set_bal_btn_;
     ftxui::Component del_user_btn_;
+    ftxui::Component admin_role_toggle_;
+    ftxui::Component mod_adm_role_btn_;
+    ftxui::Component del_adm_btn_;
+    ftxui::Component new_adm_user_input_;
+    ftxui::Component new_adm_pwd_input_;
+    ftxui::Component add_adm_btn_;
 
     void syncData();
     ftxui::Element renderAdminHeader();

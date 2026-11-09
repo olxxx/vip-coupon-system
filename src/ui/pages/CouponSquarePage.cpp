@@ -16,14 +16,33 @@ std::string timeLimitName(core::TimeConstraint tc) {
     return "不限时间";
 }
 
+bool containsTemplate(const std::vector<std::shared_ptr<shop::Coupon>>& vec,
+                      const std::string& tpl_id) {
+    return std::any_of(vec.begin(), vec.end(), [&tpl_id](const auto& c) {
+        return c && c->getTemplateId() == tpl_id;
+    });
+}
+
 } // namespace
 
 CouponSquarePage::CouponSquarePage(AppContext& context)
-    : Page(context, "支持按 [全部/免费/付费/我可领] 筛选，每种优惠券(按模板ID)限持有一张可用券。"),
-      filter_labels_({"全部", "免费申领", "付费购买", "我可领"}) {
+    : Page(context, "支持按获取方式、适用品类与时间限制多维筛选；每种优惠券(按模板ID)限持有一张可用券。"),
+      filter_labels_({"全部", "免费申领", "付费购买", "我可领"}),
+      cat_labels_({"全部品类", "数码3C", "服饰", "食品", "日用", "其他"}),
+      time_labels_({"全部时段", "不限时间", "仅工作日", "仅周末"}) {
     nav_bar_ = buildCustomerNavBar(3);
 
     filter_toggle_ = InlineToggle(&filter_labels_, &filter_mode_, [this] {
+        selected_idx_ = 0;
+        syncPool();
+    });
+
+    cat_toggle_ = InlineToggle(&cat_labels_, &cat_filter_, [this] {
+        selected_idx_ = 0;
+        syncPool();
+    });
+
+    time_toggle_ = InlineToggle(&time_labels_, &time_filter_, [this] {
         selected_idx_ = 0;
         syncPool();
     });
@@ -91,7 +110,10 @@ CouponSquarePage::CouponSquarePage(AppContext& context)
         pending_action = PageAction::push(std::make_unique<CartPage>(ctx));
     });
 
-    auto top_filter_bar = Container::Horizontal({filter_toggle_, claim_all_btn_});
+    auto top_filter_bar = Container::Vertical({
+        Container::Horizontal({filter_toggle_, claim_all_btn_}),
+        Container::Horizontal({cat_toggle_, time_toggle_})
+    });
     auto right_controls = Container::Vertical({
         acquire_btn_,
         Container::Horizontal({go_wallet_btn_, go_cart_btn_})
@@ -127,14 +149,33 @@ void CouponSquarePage::syncPool() {
         "我可领(" + std::to_string(elig_list.size()) + ")"
     };
 
+    std::vector<std::shared_ptr<shop::Coupon>> base_list;
     if (filter_mode_ == 1) {
-        filtered_pool_ = free_list;
+        base_list = free_list;
     } else if (filter_mode_ == 2) {
-        filtered_pool_ = paid_list;
+        base_list = paid_list;
     } else if (filter_mode_ == 3) {
-        filtered_pool_ = elig_list;
+        base_list = elig_list;
     } else {
-        filtered_pool_ = all;
+        base_list = all;
+    }
+
+    const bool filter_by_cat = (cat_filter_ > 0);
+    const auto by_cat = filter_by_cat
+        ? ctx.cpn_mgr.getCouponsByCategory(static_cast<core::ProductCategory>(cat_filter_))
+        : std::vector<std::shared_ptr<shop::Coupon>>{};
+
+    const bool filter_by_time = (time_filter_ > 0);
+    const auto by_time = filter_by_time
+        ? ctx.cpn_mgr.getCouponsByTimeConstraint(static_cast<core::TimeConstraint>(time_filter_ - 1))
+        : std::vector<std::shared_ptr<shop::Coupon>>{};
+
+    filtered_pool_.clear();
+    for (const auto& c : base_list) {
+        if (!c) continue;
+        if (filter_by_cat && !containsTemplate(by_cat, c->getTemplateId())) continue;
+        if (filter_by_time && !containsTemplate(by_time, c->getTemplateId())) continue;
+        filtered_pool_.push_back(c);
     }
 
     if (filtered_pool_.empty()) {
@@ -182,11 +223,24 @@ Element CouponSquarePage::render() {
     syncPool();
     const auto cust = ctx.user_mgr.getCurrentCustomer();
 
-    Element filter_box = panel("券池筛选与快捷操作", hbox({
-        filter_toggle_->Render(),
-        filler(),
-        claim_all_btn_->Render()
-    }), filter_toggle_->Focused() || claim_all_btn_->Focused());
+    const bool filter_focused = filter_toggle_->Focused() || cat_toggle_->Focused() ||
+                                time_toggle_->Focused() || claim_all_btn_->Focused();
+
+    Element filter_box = panel("券池多维筛选与快捷操作", vbox({
+        hbox({
+            text(" 类型:") | color(theme::Muted),
+            filter_toggle_->Render(),
+            filler(),
+            claim_all_btn_->Render()
+        }),
+        hbox({
+            text(" 品类:") | color(theme::Muted),
+            cat_toggle_->Render(),
+            filler(),
+            text("时段:") | color(theme::Muted),
+            time_toggle_->Render()
+        })
+    }), filter_focused);
 
     Element table_header = hbox({
         text("  "),
@@ -197,7 +251,7 @@ Element CouponSquarePage::render() {
     }) | color(theme::Muted);
 
     Element left_box = panel(
-        "公共优惠券池列表",
+        "公共优惠券池列表 (" + std::to_string(filtered_pool_.size()) + "张)",
         vbox({
             std::move(table_header),
             separator() | color(theme::Muted),
@@ -232,7 +286,7 @@ Element CouponSquarePage::render() {
             filler(),
             separator() | color(theme::Muted),
             acquire_btn_->Render() | hcenter,
-            hbox({go_wallet_btn_->Render(), go_cart_btn_->Render()}) | hcenter
+            hbox({go_wallet_btn_->Render(), text("  "), go_cart_btn_->Render()}) | hcenter
         }) | flex;
     } else {
         detail_content = text("未选择优惠券") | color(theme::Muted);

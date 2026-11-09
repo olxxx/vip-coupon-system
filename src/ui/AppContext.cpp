@@ -140,6 +140,29 @@ core::Result AppContext::registerCustomer(const std::string& username, const std
     return persistAfter(std::move(res));
 }
 
+core::Result AppContext::changePassword(const std::string& old_password, const std::string& new_password) {
+    user::Account* acc = nullptr;
+    if (auto cust = user_mgr.getCurrentCustomer()) {
+        acc = cust.get();
+    } else if (auto adm = user_mgr.getCurrentAdmin()) {
+        acc = adm.get();
+    }
+    if (!acc) {
+        return core::Result::fail("请先登录账号");
+    }
+    if (!acc->verifyPassword(old_password)) {
+        return core::Result::fail("原密码校验错误，请重新输入");
+    }
+    if (!validText(new_password, 64)) {
+        return core::Result::fail("新密码不能为空（且不含控制字符，最长 64 位）");
+    }
+    if (new_password == old_password) {
+        return core::Result::fail("新密码不能与原密码相同");
+    }
+    acc->setPassword(new_password);
+    return persistAfter(core::Result::ok("账户 [" + acc->getUsername() + "] 登录密码修改成功！"));
+}
+
 void AppContext::logout() {
     cart.clear();
     user_mgr.logout();
@@ -202,6 +225,29 @@ core::Result AppContext::changeCartQty(const std::string& product_id, int delta)
     return core::Result::ok();
 }
 
+core::Result AppContext::setCartQty(const std::string& product_id, int quantity) {
+    if (!user_mgr.isCustomerLoggedIn()) {
+        return core::Result::fail("请先登录消费者账号");
+    }
+    if (!cart.hasItem(product_id)) {
+        return core::Result::fail("请先在购物车中选择商品");
+    }
+    auto prod = prod_mgr.findProduct(product_id);
+    const std::string name = prod ? prod->getName() : product_id;
+    if (quantity <= 0) {
+        cart.updateQuantity(product_id, 0);
+        return core::Result::ok("已移除商品 " + name);
+    }
+    if (prod && quantity > prod->getStock()) {
+        return core::Result::fail("库存不足：" + name + " 当前库存仅 " +
+                                  std::to_string(prod->getStock()) + " 件");
+    }
+    if (!cart.updateQuantity(product_id, quantity)) {
+        return core::Result::fail("设定商品数量失败");
+    }
+    return core::Result::ok("已将 " + name + " 数量设定为 " + std::to_string(quantity) + " 件");
+}
+
 core::Result AppContext::removeCartItem(const std::string& product_id) {
     if (!cart.hasItem(product_id)) {
         return core::Result::fail("请先选择要移除的商品");
@@ -246,6 +292,18 @@ core::Result AppContext::claimAllFreeCoupons() {
     return persistAfter(std::move(res));
 }
 
+core::Result AppContext::removeUserCoupon(const std::string& instance_id) {
+    auto cust = user_mgr.getCurrentCustomer();
+    if (!cust) return core::Result::fail("请先登录消费者账号");
+    auto cpn = cust->findCoupon(instance_id);
+    if (!cpn) return core::Result::fail("未找到选中的优惠券实例");
+    const std::string cname = cpn->getName();
+    if (!cust->removeCoupon(instance_id)) {
+        return core::Result::fail("删除优惠券失败");
+    }
+    return persistAfter(core::Result::ok("已从背包移除优惠券：[" + instance_id + "] " + cname));
+}
+
 core::Result AppContext::cleanUsedCoupons() {
     auto cust = user_mgr.getCurrentCustomer();
     if (!cust) return core::Result::fail("请先登录消费者账号");
@@ -253,6 +311,17 @@ core::Result AppContext::cleanUsedCoupons() {
     cust->cleanUsedCoupons();
     const std::size_t removed = before - cust->getCouponCount();
     return persistAfter(core::Result::ok("已清理 " + std::to_string(removed) + " 张已核销优惠券"));
+}
+
+core::Result AppContext::clearAllCoupons() {
+    auto cust = user_mgr.getCurrentCustomer();
+    if (!cust) return core::Result::fail("请先登录消费者账号");
+    const std::size_t before = cust->getCouponCount();
+    if (before == 0) {
+        return core::Result::ok("卡券背包当前已为空");
+    }
+    cust->clearCoupons();
+    return persistAfter(core::Result::ok("已清空卡券背包（共移除 " + std::to_string(before) + " 张优惠券）"));
 }
 
 shop::PlanResult AppContext::computeQuote(const std::shared_ptr<shop::Coupon>& manual_coupon,
@@ -349,6 +418,25 @@ core::Result AppContext::replenishProduct(const std::string& id, int count) {
                                          std::to_string(prod->getStock()) + " 件"));
 }
 
+core::Result AppContext::deductProduct(const std::string& id, int count) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm || !adm->canManageInventory()) return core::Result::fail("无商品库存管理权限");
+    auto prod = prod_mgr.findProduct(id);
+    if (!prod) return core::Result::fail("未找到选中商品");
+    if (count <= 0) {
+        return core::Result::fail("扣减数量必须为正整数");
+    }
+    if (count > prod->getStock()) {
+        return core::Result::fail("扣减失败：当前库存仅 " + std::to_string(prod->getStock()) + " 件");
+    }
+    if (!prod_mgr.deductProduct(id, count)) {
+        return core::Result::fail("核减库存失败");
+    }
+    return persistAfter(core::Result::ok("已为 " + prod->getName() + " 核减 -" +
+                                         std::to_string(count) + " 件，当前库存 " +
+                                         std::to_string(prod->getStock()) + " 件"));
+}
+
 core::Result AppContext::setProductStock(const std::string& id, int stock) {
     auto adm = user_mgr.getCurrentAdmin();
     if (!adm || !adm->canManageInventory()) return core::Result::fail("无商品库存管理权限");
@@ -376,6 +464,37 @@ core::Result AppContext::updateProductPrice(const std::string& id, double price)
         return core::Result::fail("修改单价失败");
     }
     return persistAfter(core::Result::ok("已将 " + prod->getName() + " 单价更新为 " + money(price)));
+}
+
+core::Result AppContext::updateProductName(const std::string& id, const std::string& new_name) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm || !adm->canManageInventory()) return core::Result::fail("无商品管理权限");
+    auto prod = prod_mgr.findProduct(id);
+    if (!prod) return core::Result::fail("未找到选中商品");
+    const auto pname = trim(new_name);
+    if (!validText(pname, 64)) {
+        return core::Result::fail("请填写合法的商品名称（非空且不超过 64 字符）");
+    }
+    const std::string old_name = prod->getName();
+    if (!prod_mgr.updateName(id, pname)) {
+        return core::Result::fail("修改商品名称失败");
+    }
+    return persistAfter(core::Result::ok("已将商品 [" + id + "] 名称由「" + old_name + "」更新为「" + pname + "」"));
+}
+
+core::Result AppContext::updateProductCategory(const std::string& id, core::ProductCategory new_category) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm || !adm->canManageInventory()) return core::Result::fail("无商品管理权限");
+    auto prod = prod_mgr.findProduct(id);
+    if (!prod) return core::Result::fail("未找到选中商品");
+    if (new_category == core::ProductCategory::ALL) {
+        return core::Result::fail("请选择具体的商品分类");
+    }
+    if (!prod_mgr.updateCategory(id, new_category)) {
+        return core::Result::fail("修改商品分类失败");
+    }
+    return persistAfter(core::Result::ok("已将 " + prod->getName() + " 分类调整为【" +
+                                         core::getCategoryName(new_category) + "】"));
 }
 
 core::Result AppContext::removeProduct(const std::string& id) {
@@ -474,6 +593,21 @@ core::Result AppContext::updateCustomerTier(const std::string& username, core::U
     return persistAfter(std::move(res));
 }
 
+core::Result AppContext::setCustomerBalance(const std::string& username, double new_balance) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm) return core::Result::fail("请先以管理员身份登录");
+    if (!adm->canModifyUserTier()) {
+        return core::Result::fail("权限不足：仅超级管理员 (root) 可调整消费者账户余额");
+    }
+    if (!isValidAmountValue(new_balance, true)) {
+        return core::Result::fail("请输入合法的账户余额（0 ~ 1 亿元）");
+    }
+    auto cust = user_mgr.findCustomer(username);
+    if (!cust) return core::Result::fail("目标消费者账号不存在");
+    cust->setBalance(new_balance);
+    return persistAfter(core::Result::ok("已将用户 " + username + " 的账户余额设定为 " + money(new_balance)));
+}
+
 core::Result AppContext::removeCustomer(const std::string& username) {
     auto adm = user_mgr.getCurrentAdmin();
     if (!adm) return core::Result::fail("请先以管理员身份登录");
@@ -484,6 +618,58 @@ core::Result AppContext::removeCustomer(const std::string& username) {
         return core::Result::fail("目标消费者账号不存在");
     }
     return persistAfter(core::Result::ok("已删除消费者账号：" + username));
+}
+
+core::Result AppContext::registerAdmin(const std::string& username,
+                                       const std::string& password,
+                                       core::AdminRole role) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm) return core::Result::fail("请先以管理员身份登录");
+    if (!adm->canModifyUserTier()) {
+        return core::Result::fail("权限不足：仅超级管理员可创建新管理员账号");
+    }
+    const auto u = trim(username);
+    if (!validText(u, 32) || !validText(password, 64)) {
+        return core::Result::fail("管理员用户名和密码不能为空（且不含控制字符）");
+    }
+    auto res = user_mgr.registerAdmin(u, password, role);
+    if (res.success) {
+        const auto created = user_mgr.findAdmin(u);
+        const std::string rname = created ? created->getRoleName()
+                                          : (role == core::AdminRole::SUPER_ADMIN ? "超级管理员" : "运营管理员");
+        res.message = "已创建管理员账号 [" + u + "] (" + rname + ")";
+    }
+    return persistAfter(std::move(res));
+}
+
+core::Result AppContext::updateAdminRole(const std::string& username, core::AdminRole new_role) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm) return core::Result::fail("请先以管理员身份登录");
+    if (!adm->canModifyUserTier()) {
+        return core::Result::fail("权限不足：仅超级管理员可修改管理员角色权限");
+    }
+    auto target = user_mgr.findAdmin(username);
+    if (!target) return core::Result::fail("未找到目标管理员账号");
+    if (target->getUsername() == adm->getUsername() && new_role != core::AdminRole::SUPER_ADMIN) {
+        return core::Result::fail("安全保护：不能降级当前正在登录的超级管理员自身权限");
+    }
+    target->setRole(new_role);
+    return persistAfter(core::Result::ok("已将管理员 [" + username + "] 角色更新为 " + target->getRoleName()));
+}
+
+core::Result AppContext::removeAdmin(const std::string& username) {
+    auto adm = user_mgr.getCurrentAdmin();
+    if (!adm) return core::Result::fail("请先以管理员身份登录");
+    if (!adm->canModifyUserTier()) {
+        return core::Result::fail("权限不足：仅超级管理员可删除管理员账号");
+    }
+    if (username == adm->getUsername()) {
+        return core::Result::fail("安全保护：不能删除当前正在登录的管理员自身账号");
+    }
+    if (!user_mgr.removeAdmin(username)) {
+        return core::Result::fail("目标管理员账号不存在");
+    }
+    return persistAfter(core::Result::ok("已移除管理员账号：" + username));
 }
 
 core::Result AppContext::resetSystem() {

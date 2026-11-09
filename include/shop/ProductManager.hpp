@@ -32,6 +32,8 @@ public:
     bool deductProduct(const std::string& id, int count);
     bool setStock(const std::string& id, int stock);
     bool updatePrice(const std::string& id, double price);
+    bool updateName(const std::string& id, const std::string& name);
+    bool updateCategory(const std::string& id, core::ProductCategory category);
 
     //检索查询
     std::shared_ptr<Product> findProduct(const std::string& id) const;

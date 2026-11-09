@@ -54,17 +54,17 @@ ftxui::Component InlineToggle(const std::vector<std::string>* labels,
 // 按钮语义类型
 enum class ButtonKind {
     Primary,    // 主操作：强调色文字
-    Secondary,  // 次要操作：灰色文字
-    Danger,     // 危险操作：红色
+    Secondary,  // 次要操作：亮灰文字 + 括号胶囊标识
+    Danger,     // 危险/删除操作：红色文字 + 括号胶囊标识
     Link,       // 页面跳转类：强调色文字，焦点反白
     Tab,        // 页签（未激活）
     TabActive,  // 页签（当前页）
     Disabled    // 不可用外观（仍会触发 on_click，由页面给出提示）
 };
 
-// 无括号色块按钮。三态样式：
-//   常态：仅着色文字； 鼠标悬停：淡底色 + 下划线（不改变焦点）；
-//   键盘焦点：实心高亮底 + 黑色加粗字。
+// 色块按钮。三态样式：
+//   常态：操作按钮带 [文案] 胶囊底色与语义着色；鼠标悬停：淡底色 + 下划线（不改变焦点）；
+//   键盘焦点：高亮底色 + 加粗 + 下划线。
 // 鼠标仅在左键按下时获取焦点，移动不会抢走其他控件（如输入框）的焦点。
 ftxui::Component StyledButton(std::function<std::string()> label,
                               std::function<void()> on_click,
@@ -74,6 +74,10 @@ ftxui::Component StyledButton(std::function<std::string()> label,
 ftxui::Component ActionButton(const std::string& label,
                               std::function<void()> on_click,
                               bool is_primary = false);
+
+// 危险/删除类静态文案按钮（使用 ButtonKind::Danger 珊瑚红高亮）
+ftxui::Component DangerButton(const std::string& label,
+                              std::function<void()> on_click);
 
 // 单行输入框（常态暗底、悬停淡底、聚焦深蓝底）。
 // 聚焦时按 Esc 先退出输入，焦点移到页面内第一个非输入控件（Esc 被消费，不会返回上一页）。

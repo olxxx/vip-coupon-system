@@ -10,7 +10,7 @@ namespace ui {
 using namespace ftxui;
 
 CartPage::CartPage(AppContext& context)
-    : Page(context, "可在此调整商品数量 (+/-)，或点击「前往收银台」算券结算。") {
+    : Page(context, "按 ↑/↓ 移动光标，Enter 选中商品；可按 +/- 调数量、Del 移除，或按 → 进入右侧操作区。") {
     nav_bar_ = buildCustomerNavBar(2);
 
     cart_list_ = DataList(
@@ -22,20 +22,31 @@ CartPage::CartPage(AppContext& context)
                 text(" "),
                 col(std::to_string(idx + 1), 4) | color(theme::Muted),
                 col(it.getProductId(), 8) | color(theme::Muted),
-                col(it.getProductName(), 20),
+                col(it.getProductName(), 18),
                 col(money(it.getProductPrice()), 11),
-                col("x" + std::to_string(it.quantity), 8) | color(theme::Warn),
+                col("x" + std::to_string(it.quantity), 7) | color(theme::Warn),
                 text(money(it.getSubtotal())) | bold | color(theme::Good)
             });
         },
-        {},
+        [this] {
+            syncItems();
+            if (!items_.empty()) {
+                const auto& sel = items_[static_cast<std::size_t>(selected_idx_)];
+                custom_qty_ = std::to_string(sel.quantity);
+                setStatus("已选中「" + sel.getProductName() + "」，按 +/- 调整数量、Del 移除，或按 → 进入右侧面板。", false);
+            }
+        },
         "购物车当前为空。请点击右侧「继续选购商品」 或按 Esc 返回商城。");
 
     inc_btn_      = ActionButton("数量 +1", [this] { modifySelectedQty(1); });
     dec_btn_      = ActionButton("数量 -1", [this] { modifySelectedQty(-1); });
-    remove_btn_   = ActionButton("移除该项", [this] { removeSelected(); });
-    clear_btn_    = ActionButton("清空全部", [this] { clearAll(); });
-    checkout_btn_ = ActionButton("前往收银台算券结算", [this] { enterCheckout(); }, true);
+    qty_input_    = TextInput(&custom_qty_, "数量", false, [this] { applyCustomQty(); });
+    set_qty_btn_  = ActionButton("设定", [this] { applyCustomQty(); }, true);
+
+    remove_btn_   = DangerButton("移除选中项(Del)", [this] { removeSelected(); });
+    clear_btn_    = DangerButton("清空购物车(C)", [this] { clearAll(); });
+
+    checkout_btn_ = ActionButton("  前往收银台算券结算  ", [this] { enterCheckout(); }, true);
     go_coupon_btn_ = ActionButton("去领券中心", [this] {
         pending_action = PageAction::push(std::make_unique<CouponSquarePage>(ctx));
     });
@@ -43,7 +54,7 @@ CartPage::CartPage(AppContext& context)
         pending_action = PageAction::push(std::make_unique<MallPage>(ctx));
     });
 
-    auto ops_row1 = Container::Horizontal({inc_btn_, dec_btn_});
+    auto ops_row1 = Container::Horizontal({inc_btn_, dec_btn_, qty_input_, set_qty_btn_});
     auto ops_row2 = Container::Horizontal({remove_btn_, clear_btn_});
     auto nav_row  = Container::Horizontal({go_coupon_btn_, go_mall_btn_});
     auto right_controls = Container::Vertical({ops_row1, ops_row2, checkout_btn_, nav_row});
@@ -54,11 +65,17 @@ CartPage::CartPage(AppContext& context)
     });
 
     syncItems();
+    if (!items_.empty()) {
+        custom_qty_ = std::to_string(items_[static_cast<std::size_t>(selected_idx_)].quantity);
+    }
     cart_list_->TakeFocus();
 }
 
 void CartPage::on_enter() {
     syncItems();
+    if (!items_.empty()) {
+        custom_qty_ = std::to_string(items_[static_cast<std::size_t>(selected_idx_)].quantity);
+    }
     cart_list_->TakeFocus();
 }
 
@@ -80,6 +97,28 @@ void CartPage::modifySelectedQty(int delta) {
     const auto id = items_[static_cast<std::size_t>(selected_idx_)].getProductId();
     notify(ctx.changeCartQty(id, delta));
     syncItems();
+    if (!items_.empty()) {
+        custom_qty_ = std::to_string(items_[static_cast<std::size_t>(selected_idx_)].quantity);
+    }
+}
+
+void CartPage::applyCustomQty() {
+    syncItems();
+    if (items_.empty()) {
+        setStatus("购物车为空，无法设定数量", true);
+        return;
+    }
+    int qty = 0;
+    if (!parseQuantity(custom_qty_, qty, true)) {
+        setStatus("请输入非负整数数量（输入 0 将移除该商品）", true);
+        return;
+    }
+    const auto id = items_[static_cast<std::size_t>(selected_idx_)].getProductId();
+    notify(ctx.setCartQty(id, qty));
+    syncItems();
+    if (!items_.empty()) {
+        custom_qty_ = std::to_string(items_[static_cast<std::size_t>(selected_idx_)].quantity);
+    }
 }
 
 void CartPage::removeSelected() {
@@ -91,6 +130,9 @@ void CartPage::removeSelected() {
     const auto id = items_[static_cast<std::size_t>(selected_idx_)].getProductId();
     notify(ctx.removeCartItem(id));
     syncItems();
+    if (!items_.empty()) {
+        custom_qty_ = std::to_string(items_[static_cast<std::size_t>(selected_idx_)].quantity);
+    }
 }
 
 void CartPage::clearAll() {
@@ -141,9 +183,9 @@ Element CartPage::render() {
         text("  "),
         col("#", 4),
         col("编号", 8),
-        col("商品名称", 20),
+        col("商品名称", 18),
         col("单价", 11),
-        col("数量", 8),
+        col("数量", 7),
         text("小计")
     }) | color(theme::Muted);
 
@@ -157,9 +199,52 @@ Element CartPage::render() {
         cart_list_->Focused());
 
     const bool right_focused = inc_btn_->Focused() || dec_btn_->Focused() ||
+                               qty_input_->Focused() || set_qty_btn_->Focused() ||
                                remove_btn_->Focused() || clear_btn_->Focused() ||
                                checkout_btn_->Focused() || go_coupon_btn_->Focused() ||
                                go_mall_btn_->Focused();
+
+    Element sel_summary;
+    if (!items_.empty()) {
+        const auto& sel = items_[static_cast<std::size_t>(selected_idx_)];
+        sel_summary = vbox({
+            kv("当前选中:", text("[" + sel.getProductId() + "] " + sel.getProductName())
+                            | bold | color(theme::Accent)),
+            kv("单价 / 库存:",
+               hbox({
+                   text(money(sel.getProductPrice())) | color(Color::White),
+                   text("  (库存 " + std::to_string(sel.getProductStock()) + " 件)") | color(theme::Muted)
+               })),
+            kv("数量 / 小计:",
+               hbox({
+                   text("x" + std::to_string(sel.quantity) + " 件") | bold | color(theme::Warn),
+                   text("  =  "),
+                   text(money(sel.getSubtotal())) | bold | color(theme::Good)
+               }))
+        });
+    } else {
+        sel_summary = text(" 当前未选中商品（购物车为空）") | color(theme::Muted);
+    }
+
+    Element item_ops_box = vbox({
+        text(" ① 选中商品数量与移除操作") | bold | color(Color::GrayLight),
+        std::move(sel_summary),
+        hbox({
+            inc_btn_->Render(),
+            text(" "),
+            dec_btn_->Render(),
+            filler(),
+            text("设数量:") | color(theme::Muted),
+            qty_input_->Render() | size(WIDTH, EQUAL, 7),
+            text(" "),
+            set_qty_btn_->Render()
+        }),
+        hbox({
+            remove_btn_->Render(),
+            filler(),
+            clear_btn_->Render()
+        })
+    });
 
     Elements cat_rows;
     const core::ProductCategory cats[] = {
@@ -172,27 +257,11 @@ Element CartPage::render() {
     for (auto cat : cats) {
         const double sub = ctx.cart.getCategoryAmount(cat);
         if (sub > 1e-4) {
-            cat_rows.push_back(kv(core::getCategoryName(cat) + "小计:", money(sub)));
+            cat_rows.push_back(kv(" · " + core::getCategoryName(cat) + "小计:", money(sub)));
         }
     }
     if (cat_rows.empty()) {
-        cat_rows.push_back(text("暂无商品") | color(theme::Muted));
-    }
-
-    Element sel_info;
-    if (!items_.empty()) {
-        const auto& sel = items_[static_cast<std::size_t>(selected_idx_)];
-        sel_info = vbox({
-            hbox({
-                text("当前选中: ") | color(theme::Muted),
-                text(sel.getProductName()) | bold | color(Color::White),
-                text(" (x" + std::to_string(sel.quantity) + ")") | color(theme::Warn)
-            }),
-            hbox({inc_btn_->Render(), dec_btn_->Render()}) | hcenter,
-            hbox({remove_btn_->Render(), clear_btn_->Render()}) | hcenter
-        });
-    } else {
-        sel_info = text("未选中商品项") | color(theme::Muted);
+        cat_rows.push_back(text(" 暂无加购商品") | color(theme::Muted));
     }
 
     const std::string summary_label = "原价总额 (" +
@@ -200,26 +269,26 @@ Element CartPage::render() {
         std::to_string(ctx.cart.getTotalQuantity()) + "件):";
 
     Element right_box = panel(
-        "明细操作与金额统计",
+        "商品操控与金额汇总",
         vbox({
-            std::move(sel_info),
+            std::move(item_ops_box),
             separator() | color(theme::Muted),
-            text("分品类金额统计:") | bold | color(Color::GrayLight),
+            text(" ② 分品类金额统计") | bold | color(Color::GrayLight),
             vbox(std::move(cat_rows)),
-            separator() | color(theme::Muted),
             kv(summary_label,
                text(money(ctx.cart.getTotalOriginalAmount())) | bold | color(theme::Good)),
             filler(),
             separator() | color(theme::Muted),
+            text(" ③ 算券结算与页面导航") | bold | color(Color::GrayLight),
             checkout_btn_->Render() | hcenter,
-            hbox({go_coupon_btn_->Render(), go_mall_btn_->Render()}) | hcenter
+            hbox({go_coupon_btn_->Render(), text("  "), go_mall_btn_->Render()}) | hcenter
         }) | flex,
-        right_focused) | size(WIDTH, EQUAL, 44);
+        right_focused) | size(WIDTH, EQUAL, 48);
 
     return renderCustomerFrame(
         nav_bar_,
         hbox({std::move(left_box) | flex, std::move(right_box)}),
-        "↑/↓ 选择条目 | +/- 增减数量 | Del 移除 | Enter 选中 | Tab 进入操作区 | Esc 返回");
+        "↑/↓ 光标 | Enter 选中 | +/- 增减 | Del/D 移除选中项 | C 清空全部 | Tab/→ 进右侧操作区 | Esc 返回");
 }
 
 } // namespace ui

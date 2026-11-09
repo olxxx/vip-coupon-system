@@ -135,7 +135,8 @@ int main() {
         assert(square_text.find("一键领取全部免费券") != std::string::npos);
         mgr->OnEvent(ftxui::Event::Character('A'));
         assert(ctx.user_mgr.getCurrentCustomer()->getCouponCount() >= 1);
-        // 领取成功属于重要提示：弹出模态弹窗并独占按键，按 '2' 不应切页，Esc 关闭后才恢复\r\n        mgr->OnEvent(ftxui::Event::Character('2'));
+        // 领取成功属于重要提示：弹出模态弹窗并独占按键，按 '2' 不应切页，Esc 关闭后才恢复
+        mgr->OnEvent(ftxui::Event::Character('2'));
         assert(mgr->get_current_page_name() == "领券中心");
         mgr->OnEvent(ftxui::Event::Escape);
         assert(mgr->get_current_page_name() == "领券中心");
@@ -177,18 +178,30 @@ int main() {
         auto receipt_text = render_to_text(*mgr);
         assert(receipt_text.find("订单支付已完成") != std::string::npos);
 
-        // 按快捷键 '4' 进入个人中心验证流水与充值
+        // 按快捷键 '4' 进入个人中心验证多 Tab 切换、卡券管理、流水与密码修改
         mgr->OnEvent(ftxui::Event::Character('4'));
         assert(mgr->get_current_page_name() == "个人中心");
         auto uc_text = render_to_text(*mgr);
         assert(uc_text.find("个人中心") != std::string::npos);
+        assert(uc_text.find("账户余额充值") != std::string::npos);
+
+        // 切换到子 Tab 1 (我的卡券背包) 与 子 Tab 2 (账单流水历史)
+        mgr->OnEvent(ftxui::Event::F2);
+        auto uc_bag_text = render_to_text(*mgr);
+        assert(uc_bag_text.find("我的卡券背包列表") != std::string::npos);
+        assert(uc_bag_text.find("删除选中卡券") != std::string::npos);
+
+        mgr->OnEvent(ftxui::Event::F3);
+        auto uc_tx_text = render_to_text(*mgr);
+        assert(uc_tx_text.find("多态交易流水列表") != std::string::npos);
+        assert(uc_tx_text.find("交易流水凭证详情") != std::string::npos);
 
         double bal_before_recharge = ctx.user_mgr.getCurrentCustomer()->getBalance();
         assert(ctx.recharge(100.0).success);
         assert(ctx.user_mgr.getCurrentCustomer()->getBalance() == bal_before_recharge + 100.0);
         assert(ctx.cleanUsedCoupons().success);
 
-        std::cout << "[PASS] 3. 消费者加购 -> 领券 -> 智能收银台 -> 自动晋级 -> 个人中心全链路通过" << std::endl;
+        std::cout << "[PASS] 3. 消费者加购 -> 领券 -> 智能收银台 -> 自动晋级 -> 个人中心多 Tab 全链路通过" << std::endl;
     }
 
     // 4. 验证管理后台 3 大子页签渲染与 RBAC 权限拦截
@@ -208,9 +221,11 @@ int main() {
         auto user_tab_text = render_to_text(*mgr);
         assert(user_tab_text.find("仅只读查看") != std::string::npos);
         assert(!ctx.updateCustomerTier("demo", core::UserTier::V5_SUPREME).success);
+        assert(!ctx.setCustomerBalance("demo", 5000.0).success);
+        assert(!ctx.registerAdmin("newstaff", "123456", core::AdminRole::STAFF).success);
         assert(!ctx.resetSystem().success);
 
-        // 切换为 root 超级管理员验证完整权限
+        // 切换为 root 超级管理员验证完整权限与新增后台接口
         ctx.logout();
         assert(ctx.loginAdmin("root", "admin123").success);
         mgr->reset_stack(std::make_unique<ui::AdminPage>(ctx));
@@ -218,6 +233,17 @@ int main() {
         auto root_tab_text = render_to_text(*mgr);
         assert(root_tab_text.find("允许调级/删号") != std::string::npos);
         assert(ctx.updateCustomerTier("demo", core::UserTier::V3_GOLD).success);
+        assert(ctx.setCustomerBalance("demo", 3000.0).success);
+        assert(user_mgr.findCustomer("demo")->getBalance() == 3000.0);
+
+        // 验证商品扣库存、改名、改分类与管理员账号管理
+        assert(ctx.deductProduct("P1001", 1).success);
+        assert(ctx.updateProductName("P1001", "无线RGB机械键盘").success);
+        assert(prod_mgr.findProduct("P1001")->getName() == "无线RGB机械键盘");
+        assert(ctx.updateProductCategory("P1001", core::ProductCategory::DIGITAL).success);
+        assert(ctx.registerAdmin("ops2", "ops123", core::AdminRole::STAFF).success);
+        assert(ctx.updateAdminRole("ops2", core::AdminRole::SUPER_ADMIN).success);
+        assert(ctx.removeAdmin("ops2").success);
 
         // 在后台栈底按 Esc 应登出并回到系统登录页，再按 Esc 触发退出回调
         mgr->OnEvent(ftxui::Event::Escape);
@@ -227,10 +253,10 @@ int main() {
         mgr->OnEvent(ftxui::Event::Escape);
         assert(exited);
 
-        std::cout << "[PASS] 4. 管理后台 3 大模块渲染、RBAC 权限分级与 Esc 退出闭环验证通过" << std::endl;
+        std::cout << "[PASS] 4. 管理后台 3 大模块渲染、RBAC 权限分级与新增管理接口验证通过" << std::endl;
     }
 
-    // 5. 验证鼠标悬停不会抢走输入框焦点
+    // 5. 验证鼠标悬停不会抢走输入框焦点，以及卡券删除、设数量、改密码功能
     {
         ctx.logout();
         mgr->reset_stack(std::make_unique<ui::LoginPage>(ctx));
@@ -241,7 +267,21 @@ int main() {
         mgr->OnEvent(ftxui::Event::Character('z'));
         assert(render_to_text(*mgr).find("xyz") != std::string::npos);
 
-        assert(ctx.loginCustomer("demo", "123456").success);
+        assert(ctx.loginCustomer("alice", "123456").success);
+        assert(ctx.user_mgr.getCurrentCustomer()->hasCoupon("INST_1000"));
+        assert(ctx.removeUserCoupon("INST_1000").success);
+        assert(!ctx.user_mgr.getCurrentCustomer()->hasCoupon("INST_1000"));
+
+        assert(ctx.addToCart("P1001", 1).success);
+        assert(ctx.setCartQty("P1001", 5).success);
+        assert(ctx.cart.getItemQuantity("P1001") == 5);
+        assert(ctx.setCartQty("P1001", 0).success);
+        assert(!ctx.cart.hasItem("P1001"));
+
+        assert(ctx.changePassword("123456", "654321").success);
+        assert(ctx.user_mgr.getCurrentCustomer()->verifyPassword("654321"));
+        assert(ctx.changePassword("654321", "123456").success);
+
         mgr->reset_stack(std::make_unique<ui::MallPage>(ctx));
         render_to_text(*mgr);
         mgr->OnEvent(ftxui::Event::Character('/'));
@@ -257,7 +297,7 @@ int main() {
         mgr->OnEvent(ftxui::Event::Character('/'));
         mgr->OnEvent(ftxui::Event::Escape);
         assert(mgr->get_current_page_name() == "商城货架");
-        std::cout << "[PASS] 5. 鼠标悬停不抢输入框焦点、Esc 先退出输入 验证通过" << std::endl;
+        std::cout << "[PASS] 5. 鼠标悬停、Esc 退出输入、单张卡券删除、设数量与改密码验证通过" << std::endl;
     }
 
     if (fs::exists(test_dir)) {

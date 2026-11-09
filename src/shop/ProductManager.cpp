@@ -48,6 +48,19 @@ bool ProductManager::updatePrice(const std::string& id, double price)
     return products[id]->setPrice(price);
 }
 
+bool ProductManager::updateName(const std::string& id, const std::string& name)
+{
+    if(!hasProduct(id)) return false;
+    return products[id]->setName(name);
+}
+
+bool ProductManager::updateCategory(const std::string& id, core::ProductCategory category)
+{
+    if(!hasProduct(id) || category == core::ProductCategory::ALL) return false;
+    products[id]->setCategory(category);
+    return true;
+}
+
 std::shared_ptr<Product> ProductManager::findProduct(const std::string& id) const
 {
     if(!hasProduct(id)) return nullptr;

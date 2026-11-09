@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "common/Types.hpp"
 #include "coupon/Coupon.hpp"
@@ -70,6 +70,7 @@ namespace user {
 
         void addCoupon(std::shared_ptr<shop::Coupon> coupon);
         bool consumeCoupon(const std::string& instance_id);
+        bool removeCoupon(const std::string& instance_id);
 
         std::shared_ptr<shop::Coupon> findCoupon(
             const std::string& instance_id

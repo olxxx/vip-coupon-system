@@ -10,12 +10,19 @@ namespace ui {
 class CouponSquarePage : public Page {
 private:
     int filter_mode_ = 0; // 0: 全部, 1: 免费申领, 2: 付费购买, 3: 我可领
+    int cat_filter_ = 0;  // 0: 全部品类, 1..5: DIGITAL..OTHER
+    int time_filter_ = 0; // 0: 全部时段, 1: 不限时间, 2: 仅工作日, 3: 仅周末
     int selected_idx_ = 0;
+
     std::vector<std::string> filter_labels_;
+    std::vector<std::string> cat_labels_;
+    std::vector<std::string> time_labels_;
     std::vector<std::shared_ptr<shop::Coupon>> filtered_pool_;
 
     ftxui::Component nav_bar_;
     ftxui::Component filter_toggle_;
+    ftxui::Component cat_toggle_;
+    ftxui::Component time_toggle_;
     ftxui::Component claim_all_btn_;
     ftxui::Component pool_list_;
     ftxui::Component acquire_btn_;

@@ -1,4 +1,4 @@
-﻿#include "ui/Theme.hpp"
+#include "ui/Theme.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -62,7 +62,7 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-//  无括号色块按钮：悬停（淡底+下划线）与键盘焦点（实心高亮）样式区分
+//  胶囊色块按钮：操作类按钮自带 [文案] 边框标识与底色，彻底区分于普通静态文本
 // ---------------------------------------------------------------------------
 struct ButtonPalette {
     Color fg;
@@ -80,7 +80,7 @@ ButtonPalette paletteOf(ButtonKind kind) {
         case ButtonKind::Disabled:  return {theme::Muted, theme::Muted, false};
         case ButtonKind::Secondary: break;
     }
-    return {Color::GrayLight, Color::White, false};
+    return {Color::White, Color::White, false};
 }
 
 class StyledButtonComponent : public ComponentBase {
@@ -93,10 +93,24 @@ public:
     Element OnRender() override {
         const ButtonKind kind = kind_ ? kind_() : ButtonKind::Secondary;
         const ButtonPalette pal = paletteOf(kind);
-        Element el = text(" " + (label_ ? label_() : std::string()) + " ");
+        const std::string raw = label_ ? label_() : std::string();
+
+        const bool is_nav_tab = (kind == ButtonKind::Tab ||
+                                 kind == ButtonKind::TabActive ||
+                                 kind == ButtonKind::Link);
+        const bool already_bracketed = !raw.empty() && (raw.front() == '[' || raw.back() == ']');
+
+        std::string display_str;
+        if (is_nav_tab || already_bracketed) {
+            display_str = " " + raw + " ";
+        } else {
+            display_str = "[" + raw + "]";
+        }
+
+        Element el = text(display_str);
 
         if (Focused()) {
-            el = std::move(el) | bold | color(pal.fg) | bgcolor(theme::CursorBg) | underlined; // 与鼠标悬停同风格
+            el = std::move(el) | bold | color(pal.fg) | bgcolor(theme::CursorBg) | underlined;
         } else {
             el = std::move(el) | color(pal.fg);
             if (pal.bold_fg) el = std::move(el) | bold;
@@ -104,6 +118,8 @@ public:
                 el = std::move(el) | bgcolor(theme::RowSelectBg);
             } else if (hovered_ && kind != ButtonKind::Disabled) {
                 el = std::move(el) | bgcolor(theme::CursorBg) | underlined;
+            } else if (!is_nav_tab) {
+                el = std::move(el) | bgcolor(theme::BadgeBg);
             }
         }
         return std::move(el) | reflect(box_);
@@ -433,6 +449,14 @@ Component ActionButton(const std::string& label,
         [label] { return label; },
         std::move(on_click),
         [is_primary] { return is_primary ? ButtonKind::Primary : ButtonKind::Secondary; });
+}
+
+Component DangerButton(const std::string& label,
+                       std::function<void()> on_click) {
+    return StyledButton(
+        [label] { return label; },
+        std::move(on_click),
+        [] { return ButtonKind::Danger; });
 }
 
 Component TextInput(std::string* value,

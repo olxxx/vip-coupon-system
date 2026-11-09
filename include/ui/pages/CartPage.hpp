@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/Page.hpp"
+#include <string>
 #include <vector>
 
 namespace ui {
@@ -8,12 +9,15 @@ namespace ui {
 class CartPage : public Page {
 private:
     int selected_idx_ = 0;
+    std::string custom_qty_ = "1";
     std::vector<shop::CartItem> items_;
 
     ftxui::Component nav_bar_;
     ftxui::Component cart_list_;
     ftxui::Component inc_btn_;
     ftxui::Component dec_btn_;
+    ftxui::Component qty_input_;
+    ftxui::Component set_qty_btn_;
     ftxui::Component remove_btn_;
     ftxui::Component clear_btn_;
     ftxui::Component checkout_btn_;
@@ -22,6 +26,7 @@ private:
 
     void syncItems();
     void modifySelectedQty(int delta);
+    void applyCustomQty();
     void removeSelected();
     void clearAll();
     void enterCheckout();
