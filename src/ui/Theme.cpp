@@ -1,4 +1,4 @@
-#include "ui/Theme.hpp"
+﻿#include "ui/Theme.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -96,7 +96,7 @@ public:
         Element el = text(" " + (label_ ? label_() : std::string()) + " ");
 
         if (Focused()) {
-            el = std::move(el) | bold | color(Color::Black) | bgcolor(pal.focus_bg);
+            el = std::move(el) | bold | color(pal.fg) | bgcolor(theme::CursorBg) | underlined; // 与鼠标悬停同风格
         } else {
             el = std::move(el) | color(pal.fg);
             if (pal.bold_fg) el = std::move(el) | bold;
