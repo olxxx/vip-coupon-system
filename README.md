@@ -40,7 +40,7 @@
 ## 环境要求
 
 - 编译标准：C++17
-- 构建工具：CMake (>= 3.20)
+- 构建工具：CMake (>= 3.21，使用 CMakePresets.json)
 - 编译器支持：MSVC 2019+、GCC 9+、Clang 10+
 - 第三方依赖（通过 CMake FetchContent 自动拉取并构建，无需手动安装）：
   - nlohmann/json (v3.12.0)
@@ -56,19 +56,35 @@ git clone https://github.com/olxxx/vip-coupon-system.git
 cd vip-coupon-system
 ```
 
-### 2. 编译项目
+### 2. 编译项目（推荐使用 CMake Presets）
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+cmake --preset release           # 配置（推荐）
+cmake --build --preset release   # 编译
 ```
-构建产物集中输出至 `bin/` 目录：
-- 主执行程序：`bin/vip-coupon-system` (Windows 下为 `bin/vip-coupon-system.exe`)
-- 测试可执行文件：`build/bin/tests/`
+可选预设（`cmake --list-presets` 可查看当前平台可用的预设）：
+
+| 预设 | 说明 |
+| :--- | :--- |
+| `release` | **推荐**。优化构建，使用系统默认编译器 |
+| `debug` | 调试构建（带调试符号），使用系统默认编译器 |
+| `gcc-release` / `gcc-debug` | 固定使用 GCC (`g++`) |
+| `clang-release` / `clang-debug` | 固定使用 Clang (`clang++`) |
+| `msvc-release` / `msvc-debug` | 固定使用 MSVC (`cl`)，仅 Windows，需在 “Developer Command Prompt for VS” 中运行 |
+
+使用固定编译器的示例：
+```bash
+cmake --preset gcc-release
+cmake --build --preset gcc-release
+```
+
+构建产物：
+- 主执行程序：`bin/vip-coupon-system` (Windows 下为 `bin/vip-coupon-system.exe`)。注意：所有预设共用 `bin/` 目录，后一次编译会覆盖前一次的主程序。
 
 ### 3. 运行自动化测试 (CTest)
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --preset release
 ```
+（使用其他预设构建时，请使用同名的测试预设，例如 `ctest --preset gcc-release`。）
 执行全部 9 项单元与集成测试（涵盖用户、商品、优惠券、推荐规划器、持久化及 UI 集成）。
 
 ### 4. 启动程序

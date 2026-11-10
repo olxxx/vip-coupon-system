@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 project(vip-coupon-system
     VERSION 1.0.0
@@ -77,48 +77,45 @@ set(CORE_SRC_FILES
     src/ui/pages/UserCenterPage.cpp
 )
 
-# 主可执行文件目标
-add_executable(vip-coupon-system
-    src/main.cpp
-    ${CORE_SRC_FILES}
+
+# ---------------------------------------------------------------------------
+#  Core Static Library (只编译 1 次，供主程序和测试复用)
+# ---------------------------------------------------------------------------
+add_library(vip_core STATIC ${CORE_SRC_FILES})
+
+target_compile_features(vip_core PUBLIC cxx_std_17)
+set_target_properties(vip_core PROPERTIES CXX_EXTENSIONS OFF)
+
+# 头文件搜索路径 (PUBLIC: 下游自动继承)
+target_include_directories(vip_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+# MSVC 中文 UTF-8 防乱码需传递给下游 (头文件含中文)；警告选项仅库自身使用
+target_compile_options(vip_core PUBLIC
+    $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
+)
+target_compile_options(vip_core PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/W4;/permissive->
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra>
 )
 
-# ---------------------------------------------------------------------------
-#  Target Properties & Compilation Features
-# ---------------------------------------------------------------------------
-target_compile_features(vip-coupon-system PRIVATE cxx_std_17)
-set_target_properties(vip-coupon-system PROPERTIES CXX_EXTENSIONS OFF)
-
-# 头文件搜索路径 (包含 include/)
-target_include_directories(vip-coupon-system PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-
-# 跨编译器编译选项 (MSVC 中文 UTF-8 防乱码与严格模式)
-if(MSVC)
-    target_compile_options(vip-coupon-system PRIVATE
-        /W4
-        /utf-8
-        /permissive-
-    )
-else()
-    target_compile_options(vip-coupon-system PRIVATE
-        -Wall
-        -Wextra
-    )
-endif()
-
 # Windows 防御性宏定义 (防止 windows.h 命名污染破坏 std::min/std::max)
-target_compile_definitions(vip-coupon-system PRIVATE
-    NOMINMAX
-    WIN32_LEAN_AND_MEAN
+target_compile_definitions(vip_core PUBLIC
+    $<$<PLATFORM_ID:Windows>:NOMINMAX;WIN32_LEAN_AND_MEAN>
 )
 
 # 链接第三方命名空间目标
-target_link_libraries(vip-coupon-system PRIVATE
+target_link_libraries(vip_core PUBLIC
     nlohmann_json::nlohmann_json
     ftxui::screen
     ftxui::dom
     ftxui::component
 )
+
+# ---------------------------------------------------------------------------
+#  Main Executable
+# ---------------------------------------------------------------------------
+add_executable(vip-coupon-system src/main.cpp)
+target_link_libraries(vip-coupon-system PRIVATE vip_core)
 
 # ---------------------------------------------------------------------------
 #  Custom Targets (Convenient Launchers)
@@ -150,22 +147,14 @@ set(TEST_SOURCES
 foreach(TEST_SRC ${TEST_SOURCES})
     get_filename_component(TEST_NAME ${TEST_SRC} NAME_WE)
 
-    add_executable(${TEST_NAME} ${TEST_SRC} ${CORE_SRC_FILES})
-    target_compile_features(${TEST_NAME} PRIVATE cxx_std_17)
-    target_include_directories(${TEST_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    # 只编译测试文件自身，链接 vip_core 静态库
+    add_executable(${TEST_NAME} ${TEST_SRC})
+    target_link_libraries(${TEST_NAME} PRIVATE vip_core)
 
-    if(MSVC)
-        target_compile_options(${TEST_NAME} PRIVATE /W4 /utf-8 /permissive- /U_NDEBUG /UNDEBUG)
-    else()
-        target_compile_options(${TEST_NAME} PRIVATE -Wall -Wextra -UNDEBUG)
-    endif()
-    target_compile_definitions(${TEST_NAME} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-
-    target_link_libraries(${TEST_NAME} PRIVATE
-        nlohmann_json::nlohmann_json
-        ftxui::screen
-        ftxui::dom
-        ftxui::component
+    # 强制在 Release 模式下保留测试文件中的 assert() 断言
+    target_compile_options(${TEST_NAME} PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4;/permissive-;/U_NDEBUG;/UNDEBUG>
+        $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall;-Wextra;-UNDEBUG>
     )
 
     # 测试产出二进制隔离存放在 build/bin/tests 目录
