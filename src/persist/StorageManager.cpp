@@ -4,29 +4,70 @@
 #include <fstream>
 #include <iomanip>
 #include <algorithm>
+#include <system_error>
+
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace persist
 {
 
 namespace {
 
+// 辅助函数：跨平台获取当前可执行文件自身所在的目录
+std::filesystem::path getExecutableDir()
+{
+#ifdef _WIN32
+    std::wstring buffer(MAX_PATH, L'\0');
+    while (true)
+    {
+        DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if (len == 0)
+        {
+            break;
+        }
+        if (len < buffer.size() - 1)
+        {
+            buffer.resize(len);
+            return std::filesystem::path(buffer).parent_path();
+        }
+        buffer.resize(buffer.size() * 2);
+    }
+#elif defined(__linux__)
+    std::error_code ec;
+    auto exe_path = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec && !exe_path.empty())
+    {
+        return exe_path.parent_path();
+    }
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    if (size > 0)
+    {
+        std::string buffer(size, '\0');
+        if (_NSGetExecutablePath(buffer.data(), &size) == 0)
+        {
+            std::error_code ec;
+            auto canonical_path = std::filesystem::weakly_canonical(buffer.c_str(), ec);
+            return (ec ? std::filesystem::path(buffer.c_str()) : canonical_path).parent_path();
+        }
+    }
+#endif
+    return std::filesystem::current_path();
+}
+
 // 辅助函数：根据运行环境进行智能路径自适应探测
 std::filesystem::path resolveAdaptiveDataDir(std::filesystem::path target_dir)
 {
-    // 仅当用户使用默认的 "data" 相对路径时才触发自适应探测
+    // 仅当用户使用默认的 "data" 相对路径时，直接锚定到可执行程序自身所在目录下的 data/
     // 若显式传入如 "tests/data" 或绝对路径，则完全尊重入参
     if (target_dir == "data" || target_dir == "data/")
     {
-        // 场景 1: 从项目根目录启动运行 (当前工作目录下存在 bin/ 且存在 bin/data/ 目录或已有数据)
-        if (std::filesystem::exists("bin/data"))
-        {
-            return std::filesystem::path("bin/data");
-        }
-        // 场景 2: 从项目根目录首次冷启动 (存在 bin/ 目录但 bin/data/ 尚未建立)
-        if (std::filesystem::exists("bin") && std::filesystem::is_directory("bin"))
-        {
-            return std::filesystem::path("bin/data");
-        }
+        return getExecutableDir() / "data";
     }
     return target_dir;
 }
