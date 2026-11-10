@@ -133,6 +133,8 @@ int main() {
         assert(account.getTier() == core::UserTier::V1_BRONZE);
 
         assert(!account.deductBalance(99999.0, "ORDER_FAILED"));
+        assert(!account.deductBalance(-10.0, "ORDER_NEG"));
+        assert(!account.deductBalance(-0.00005, "ORDER_TINY_NEG"));
         assert(isClose(account.getBalance(), 1300.0));
         assert(isClose(account.getTotalSpent(), 200.0));
 

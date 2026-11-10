@@ -79,12 +79,18 @@ core::Result CouponManager::buyPaidCoupon(const std::string &template_id, user::
     if (hasUserHeldCoupon(customer, template_id))
         return core::Result::fail("您已持有该优惠券，不可重复购买");
 
-    // 扣减余额并记录流水
-    if (!customer.deductForCoupon(coupon->getCost(), coupon->getName(), coupon->getTemplateId()))
+    if (!core::isAmountGTE(customer.getBalance(), coupon->getCost()))
         return core::Result::fail("账户余额不足，购券失败");
 
     std::string instance_id = generateNextInstanceId();
     auto instance_coupon = coupon->cloneInstance(instance_id);
+    if (!instance_coupon)
+        return core::Result::fail("系统异常：生成优惠券实例失败");
+
+    // 扣减余额并记录流水
+    if (!customer.deductForCoupon(coupon->getCost(), coupon->getName(), coupon->getTemplateId()))
+        return core::Result::fail("账户余额不足，购券失败");
+
     customer.addCoupon(std::move(instance_coupon));
     return core::Result::ok("优惠券购买成功");
 }

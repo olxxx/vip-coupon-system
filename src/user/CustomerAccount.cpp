@@ -119,7 +119,7 @@ namespace user {
         double amount,
         const std::string& order_id
     ) {
-        if (amount <= -1e-4
+        if (amount < 0.0
             || !core::isAmountGTE(balance, amount)) {
             return false;
         }

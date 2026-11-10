@@ -126,9 +126,11 @@ int main()
         assert(cart.empty());
 
         // updateQuantity 修改与置 0 移除
-        cart.addItem(p2, 5);
+        cart.addItem(p2, 5); // p2 stock = 10
         assert(cart.updateQuantity("P1002", 2));
         assert(cart.getItemQuantity("P1002") == 2);
+        assert(!cart.updateQuantity("P1002", 99)); // 超过库存上限 10，拦截！
+        assert(cart.getItemQuantity("P1002") == 2); // 数量保持不变
         assert(!cart.updateQuantity("P1002", -1)); // 拦截负数
         assert(cart.updateQuantity("P1002", 0));  // 置 0 自动移除
         assert(!cart.hasItem("P1002"));

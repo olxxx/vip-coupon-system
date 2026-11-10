@@ -66,9 +66,10 @@ bool Cart::removeItem(const std::string& productId)
 bool Cart::updateQuantity(const std::string& productId, int quantity)
 {
     if(!hasItem(productId)||quantity<0) return false;
+    if(quantity==0)
+        return removeItem(productId);
+    if(!items[productId].product->hasStock(quantity)) return false;
     items[productId].quantity=quantity;
-    if(items[productId].quantity==0)
-        removeItem(productId);
     return true;
 }
 
