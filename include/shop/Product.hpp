@@ -22,8 +22,8 @@ public:
     virtual ~Product() {}
 
     //Getters
-    std::string getId() const { return id; }
-    std::string getName() const { return name; }
+    const std::string& getId() const { return id; }
+    const std::string& getName() const { return name; }
     core::ProductCategory getCategory() const { return category; }
     double getPrice() const { return price; }
     int getStock() const { return stock; }

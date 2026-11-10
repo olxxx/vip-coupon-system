@@ -243,7 +243,19 @@ Element CartPage::render() {
         })
     });
 
-    const double total_orig = ctx.cart.getTotalOriginalAmount();
+    double total_orig = 0.0;
+    int total_qty = 0;
+    double cat_subs[6] = {0.0};
+    for (const auto& it : items_) {
+        const double sub = it.getSubtotal();
+        total_orig += sub;
+        total_qty += it.quantity;
+        const int cat_idx = static_cast<int>(it.getProductCategory());
+        if (cat_idx >= 1 && cat_idx <= 5) {
+            cat_subs[cat_idx] += sub;
+        }
+    }
+
     Elements cat_rows;
     const core::ProductCategory cats[] = {
         core::ProductCategory::DIGITAL,
@@ -253,7 +265,7 @@ Element CartPage::render() {
         core::ProductCategory::OTHER
     };
     for (auto cat : cats) {
-        const double sub = ctx.cart.getCategoryAmount(cat);
+        const double sub = cat_subs[static_cast<int>(cat)];
         if (sub > 1e-4) {
             cat_rows.push_back(kv(" · " + core::getCategoryName(cat) + "小计:", money(sub)));
         }
@@ -268,8 +280,8 @@ Element CartPage::render() {
     const double est_member_pay = total_orig * tcfg.discount_rate;
 
     const std::string summary_label = " 原价总额 (" +
-        std::to_string(ctx.cart.getDistinctCount()) + "种/" +
-        std::to_string(ctx.cart.getTotalQuantity()) + "件):";
+        std::to_string(items_.size()) + "种/" +
+        std::to_string(total_qty) + "件):";
 
     Element right_box = panel(
         "商品操控与金额汇总",

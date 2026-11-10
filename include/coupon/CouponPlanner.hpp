@@ -70,7 +70,7 @@ public:
     static PlanResult computeManualPlan
     (
         const Cart& cart,
-        std::shared_ptr<Coupon> selected_coupon,
+        const std::shared_ptr<Coupon>& selected_coupon,
         core::UserTier user_tier,
         core::DayOfWeek current_day
     );

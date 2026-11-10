@@ -42,7 +42,7 @@ bool Product::setPrice(double num)
 bool Product::setName(std::string str)
 {
     if(str.empty()) return false;
-    name=str;
+    name=std::move(str);
     return true;
 }
 

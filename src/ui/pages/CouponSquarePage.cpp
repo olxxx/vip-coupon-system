@@ -16,13 +16,6 @@ std::string timeLimitName(core::TimeConstraint tc) {
     return "不限时间";
 }
 
-bool containsTemplate(const std::vector<std::shared_ptr<shop::Coupon>>& vec,
-                      const std::string& tpl_id) {
-    return std::any_of(vec.begin(), vec.end(), [&tpl_id](const auto& c) {
-        return c && c->getTemplateId() == tpl_id;
-    });
-}
-
 } // namespace
 
 CouponSquarePage::CouponSquarePage(AppContext& context)
@@ -137,46 +130,41 @@ void CouponSquarePage::on_enter() {
 void CouponSquarePage::syncPool() {
     const auto cust = ctx.user_mgr.getCurrentCustomer();
     const auto& all = ctx.cpn_mgr.getPublicPool();
-    const auto free_list = ctx.cpn_mgr.getFreeCoupons();
-    const auto paid_list = ctx.cpn_mgr.getPaidCoupons();
-    const auto elig_list = cust ? ctx.cpn_mgr.getEligibleCouponsForUser(*cust)
-                                : std::vector<std::shared_ptr<shop::Coupon>>{};
+
+    std::size_t free_cnt = 0;
+    std::size_t paid_cnt = 0;
+    std::size_t elig_cnt = 0;
+    const bool filter_by_cat = (cat_filter_ > 0);
+    const auto target_cat = static_cast<core::ProductCategory>(cat_filter_);
+    const bool filter_by_time = (time_filter_ > 0);
+    const auto target_time = static_cast<core::TimeConstraint>(time_filter_ - 1);
+
+    filtered_pool_.clear();
+    filtered_pool_.reserve(all.size());
+
+    for (const auto& c : all) {
+        if (!c) continue;
+        const bool is_free = c->isFree();
+        const bool is_elig = cust && (c->getMinTier() <= cust->getTier());
+        if (is_free) ++free_cnt;
+        else ++paid_cnt;
+        if (is_elig) ++elig_cnt;
+
+        if (filter_mode_ == 1 && !is_free) continue;
+        if (filter_mode_ == 2 && is_free) continue;
+        if (filter_mode_ == 3 && !is_elig) continue;
+        if (filter_by_cat && c->getTargetCategory() != target_cat) continue;
+        if (filter_by_time && c->getTimeConstraint() != target_time) continue;
+
+        filtered_pool_.push_back(c);
+    }
 
     filter_labels_ = {
         "全部(" + std::to_string(all.size()) + ")",
-        "免费申领(" + std::to_string(free_list.size()) + ")",
-        "付费购买(" + std::to_string(paid_list.size()) + ")",
-        "我可领(" + std::to_string(elig_list.size()) + ")"
+        "免费申领(" + std::to_string(free_cnt) + ")",
+        "付费购买(" + std::to_string(paid_cnt) + ")",
+        "我可领(" + std::to_string(elig_cnt) + ")"
     };
-
-    std::vector<std::shared_ptr<shop::Coupon>> base_list;
-    if (filter_mode_ == 1) {
-        base_list = free_list;
-    } else if (filter_mode_ == 2) {
-        base_list = paid_list;
-    } else if (filter_mode_ == 3) {
-        base_list = elig_list;
-    } else {
-        base_list = all;
-    }
-
-    const bool filter_by_cat = (cat_filter_ > 0);
-    const auto by_cat = filter_by_cat
-        ? ctx.cpn_mgr.getCouponsByCategory(static_cast<core::ProductCategory>(cat_filter_))
-        : std::vector<std::shared_ptr<shop::Coupon>>{};
-
-    const bool filter_by_time = (time_filter_ > 0);
-    const auto by_time = filter_by_time
-        ? ctx.cpn_mgr.getCouponsByTimeConstraint(static_cast<core::TimeConstraint>(time_filter_ - 1))
-        : std::vector<std::shared_ptr<shop::Coupon>>{};
-
-    filtered_pool_.clear();
-    for (const auto& c : base_list) {
-        if (!c) continue;
-        if (filter_by_cat && !containsTemplate(by_cat, c->getTemplateId())) continue;
-        if (filter_by_time && !containsTemplate(by_time, c->getTemplateId())) continue;
-        filtered_pool_.push_back(c);
-    }
 
     if (filtered_pool_.empty()) {
         selected_idx_ = 0;

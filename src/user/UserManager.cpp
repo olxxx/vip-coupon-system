@@ -124,10 +124,6 @@ namespace user {
         const std::string& username,
         const std::string& password
     ) {
-        if (!hasCustomer(username)) {
-            return core::Result::fail("账号不存在");
-        }
-
         auto customer = findCustomer(username);
         if (!customer) {
             return core::Result::fail("账号不存在");
@@ -137,7 +133,7 @@ namespace user {
             return core::Result::fail("密码错误");
         }
 
-        current_customer = customer;
+        current_customer = std::move(customer);
         current_admin.reset();
 
         return core::Result::ok("登录成功");
@@ -147,10 +143,6 @@ namespace user {
         const std::string& username,
         const std::string& password
     ) {
-        if (!hasAdmin(username)) {
-            return core::Result::fail("管理员账号不存在");
-        }
-
         auto admin = findAdmin(username);
         if (!admin) {
             return core::Result::fail("管理员账号不存在");
@@ -160,7 +152,7 @@ namespace user {
             return core::Result::fail("密码错误");
         }
 
-        current_admin = admin;
+        current_admin = std::move(admin);
         current_customer.reset();
 
         return core::Result::ok("管理员登录成功");
@@ -383,63 +375,57 @@ namespace user {
                 std::shared_ptr<AdminAccount>
             > loaded_admins;
 
-            const nlohmann::json customer_array =
-                json.value(
-                    "customers",
-                    nlohmann::json::array()
-                );
+            if (const auto cust_it = json.find("customers");
+                cust_it != json.end() && cust_it->is_array()) {
+                for (const auto& item : *cust_it) {
+                    auto customer = CustomerAccount::fromJson(item);
 
-            for (const auto& item : customer_array) {
-                auto customer = CustomerAccount::fromJson(item);
+                    if (!customer
+                        || customer->getUsername().empty()) {
+                        return false;
+                    }
 
-                if (!customer
-                    || customer->getUsername().empty()) {
-                    return false;
+                    const std::string& username =
+                        customer->getUsername();
+
+                    if (loaded_customers.find(username)
+                        != loaded_customers.end()
+                        || loaded_admins.find(username)
+                        != loaded_admins.end()) {
+                        return false;
+                    }
+
+                    loaded_customers.emplace(
+                        username,
+                        std::move(customer)
+                    );
                 }
-
-                const std::string username =
-                    customer->getUsername();
-
-                if (loaded_customers.find(username)
-                    != loaded_customers.end()
-                    || loaded_admins.find(username)
-                    != loaded_admins.end()) {
-                    return false;
-                }
-
-                loaded_customers.emplace(
-                    username,
-                    std::move(customer)
-                );
             }
 
-            const nlohmann::json admin_array =
-                json.value(
-                    "admins",
-                    nlohmann::json::array()
-                );
+            if (const auto adm_it = json.find("admins");
+                adm_it != json.end() && adm_it->is_array()) {
+                for (const auto& item : *adm_it) {
+                    auto admin = AdminAccount::fromJson(item);
 
-            for (const auto& item : admin_array) {
-                auto admin = AdminAccount::fromJson(item);
+                    if (!admin || admin->getUsername().empty()) {
+                        return false;
+                    }
 
-                if (!admin || admin->getUsername().empty()) {
-                    return false;
+                    const std::string& username =
+                        admin->getUsername();
+
+                    if (loaded_customers.find(username)
+                        != loaded_customers.end()
+                        || loaded_admins.find(username)
+                        != loaded_admins.end()) {
+                        return false;
+                    }
+
+                    loaded_admins.emplace(
+                        username,
+                        std::move(admin)
+                    );
                 }
-
-                const std::string username =
-                    admin->getUsername();
-
-                if (loaded_customers.find(username)
-                    != loaded_customers.end()
-                    || loaded_admins.find(username)
-                    != loaded_admins.end()) {
-                    return false;
-                }
-
-                loaded_admins.emplace(
-                    username,
-                    std::move(admin)
-                );
             }
 
             customers = std::move(loaded_customers);

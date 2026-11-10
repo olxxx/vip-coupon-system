@@ -39,15 +39,15 @@ namespace user {
             return picosha2::hash256_hex_string(plain_password);
         }
 
-        std::string getUsername() const {
+        const std::string& getUsername() const {
             return username;
         }
 
-        std::string getCreatedAt() const {
+        const std::string& getCreatedAt() const {
             return created_at;
         }
 
-        std::string getPasswordHash() const {
+        const std::string& getPasswordHash() const {
             return password_hash;
         }
 
@@ -55,7 +55,7 @@ namespace user {
             return password_hash == hashPassword(input_password);
         }
 
-        void setPassword(std::string new_password) {
+        void setPassword(const std::string& new_password) {
             password_hash = hashPassword(new_password);
         }
 

@@ -515,26 +515,23 @@ namespace user {
                 parseTier(json.value("tier", 0))
             );
 
-            const nlohmann::json coupon_array =
-                json.value("coupons", nlohmann::json::array());
-
-            for (const auto& item : coupon_array) {
-                auto coupon = persist::CouponFactory::fromJson(item);
-                if (coupon) {
-                    account->addCoupon(std::move(coupon));
+            if (const auto cpn_it = json.find("coupons");
+                cpn_it != json.end() && cpn_it->is_array()) {
+                for (const auto& item : *cpn_it) {
+                    auto coupon = persist::CouponFactory::fromJson(item);
+                    if (coupon) {
+                        account->addCoupon(std::move(coupon));
+                    }
                 }
             }
 
-            const nlohmann::json transaction_array =
-                json.value(
-                    "transactions",
-                    nlohmann::json::array()
-                );
-
-            for (const auto& item : transaction_array) {
-                auto transaction = persist::TransactionFactory::fromJson(item);
-                if (transaction) {
-                    account->addTransaction(std::move(transaction));
+            if (const auto tx_it = json.find("transactions");
+                tx_it != json.end() && tx_it->is_array()) {
+                for (const auto& item : *tx_it) {
+                    auto transaction = persist::TransactionFactory::fromJson(item);
+                    if (transaction) {
+                        account->addTransaction(std::move(transaction));
+                    }
                 }
             }
 

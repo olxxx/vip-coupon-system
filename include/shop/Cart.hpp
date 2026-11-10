@@ -65,7 +65,11 @@ public:
     bool hasItem(const std::string& productId) const { return items.find(productId) != items.end(); }
 
     // 获取指定商品的加购件数 (不存在返回 0)
-    int getItemQuantity(const std::string& productId) const { return hasItem(productId) ? items.at(productId).quantity : 0; }
+    int getItemQuantity(const std::string& productId) const
+    {
+        auto it = items.find(productId);
+        return it != items.end() ? it->second.quantity : 0;
+    }
 
     // ========================================================
     // 3. 视图导出与外部遍历

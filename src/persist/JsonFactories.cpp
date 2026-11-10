@@ -23,10 +23,6 @@ std::shared_ptr<shop::Coupon> CouponFactory::fromJson(const nlohmann::json& j) {
         return nullptr;
     }
 
-    if (j.value("is_used", false)) {
-        coupon->markAsUsed();
-    }
-
     return std::shared_ptr<shop::Coupon>(std::move(coupon));
 }
 

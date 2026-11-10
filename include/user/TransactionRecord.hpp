@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "common/Types.hpp"
 #include <string>
 #include <memory>
@@ -47,8 +47,8 @@ namespace user {
 
         virtual ~TransactionRecord() = default;
 
-        std::string getRecordId() const { return record_id; }
-        std::string getTimestamp() const { return timestamp; }
+        const std::string& getRecordId() const { return record_id; }
+        const std::string& getTimestamp() const { return timestamp; }
         double getAmount() const { return amount; }
         TransactionType getType() const { return type; }//读取这条流水记录的类型
         std::string getTypeName() const { return getTransactionTypeName(type); }
@@ -70,7 +70,7 @@ namespace user {
         std::string channel; // 充值渠道 (如 "微信支付", "兑换码")
     public:
         RechargeRecord(std::string id, std::string time, double amount, std::string channel);
-        std::string getChannel() const { return channel; }
+        const std::string& getChannel() const { return channel; }
         std::string getFormattedText() const override;
         nlohmann::json toJson() const override;
         static std::unique_ptr<RechargeRecord> fromJson(const nlohmann::json& j);
@@ -83,8 +83,8 @@ namespace user {
         std::string description;   // 消费摘要 (如 "购买商品结算")
     public:
         ExpenseRecord(std::string id, std::string time, double amount, std::string order_id, std::string desc);
-        std::string getOrderId() const { return order_id; }
-        std::string getDescription() const { return description; }
+        const std::string& getOrderId() const { return order_id; }
+        const std::string& getDescription() const { return description; }
         std::string getFormattedText() const override;
         nlohmann::json toJson() const override;
         static std::unique_ptr<ExpenseRecord> fromJson(const nlohmann::json& j);
@@ -97,8 +97,8 @@ namespace user {
         std::string coupon_name;   // 购买的券名称
     public:
         PurchaseCouponRecord(std::string id, std::string time, double amount, std::string tpl_id, std::string cpn_name);
-        std::string getTemplateId() const { return template_id; }
-        std::string getCouponName() const { return coupon_name; }
+        const std::string& getTemplateId() const { return template_id; }
+        const std::string& getCouponName() const { return coupon_name; }
         std::string getFormattedText() const override;
         nlohmann::json toJson() const override;
         static std::unique_ptr<PurchaseCouponRecord> fromJson(const nlohmann::json& j);
@@ -111,8 +111,8 @@ namespace user {
         std::string new_tier_name; // 新等级名称
     public:
         UpgradeRecord(std::string id, std::string time, std::string old_tier, std::string new_tier);
-        std::string getOldTierName() const { return old_tier_name; }
-        std::string getNewTierName() const { return new_tier_name; }
+        const std::string& getOldTierName() const { return old_tier_name; }
+        const std::string& getNewTierName() const { return new_tier_name; }
         std::string getFormattedText() const override;
         nlohmann::json toJson() const override;
         static std::unique_ptr<UpgradeRecord> fromJson(const nlohmann::json& j);

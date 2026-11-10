@@ -49,10 +49,10 @@ public:
     virtual ~Coupon()=default;
 
     // --- 只读属性访问 ---
-    std::string getTemplateId() const { return template_id; }
-    std::string getInstanceId() const { return instance_id; }
+    const std::string& getTemplateId() const { return template_id; }
+    const std::string& getInstanceId() const { return instance_id; }
     void setInstanceId(std::string new_instance_id) { instance_id=std::move(new_instance_id); }
-    std::string getName() const { return name; }
+    const std::string& getName() const { return name; }
     double getCost() const { return cost; }
     double getMinSpend() const { return min_spend; }
     core::ProductCategory getTargetCategory() const { return target_cat; }

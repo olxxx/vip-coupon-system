@@ -1,6 +1,7 @@
 #include "coupon/CouponPlanner.hpp"
 #include "common/Types.hpp"
 #include <algorithm>
+#include <iterator>
 
 namespace shop
 {
@@ -82,7 +83,7 @@ PlanResult CouponPlanner::computeOptimalPlan(
 
 PlanResult CouponPlanner::computeManualPlan(
     const Cart& cart,
-    std::shared_ptr<Coupon> selected_coupon,
+    const std::shared_ptr<Coupon>& selected_coupon,
     core::UserTier user_tier,
     core::DayOfWeek current_day)
 {
@@ -111,19 +112,44 @@ std::vector<CouponEvaluationItem> CouponPlanner::evaluateAndSortAllCoupons(
     core::UserTier user_tier,
     core::DayOfWeek current_day)
 {
-    PlanResult optimal = computeOptimalPlan(cart, user_coupons, user_tier, current_day);
-    std::shared_ptr<Coupon> best_coupon = optimal.best_coupon;
+    std::shared_ptr<Coupon> best_coupon = nullptr;
+    double max_discount = 0.0;
     std::vector<CouponEvaluationItem> sorted_coupons;
     std::vector<CouponEvaluationItem> unavailable_coupons;
+    sorted_coupons.reserve(user_coupons.size());
+    unavailable_coupons.reserve(user_coupons.size());
+
     for(const auto& coupon : user_coupons)
     {
         if(!coupon) continue;
         EligbilityCheck check = evaluateEligbility(*coupon, cart, user_tier, current_day);
         if(check.is_eligible)
-            sorted_coupons.push_back({coupon, check, coupon == best_coupon});
+        {
+            if(check.potential_discount > max_discount)
+            {
+                max_discount = check.potential_discount;
+                best_coupon = coupon;
+            }
+            sorted_coupons.push_back({coupon, std::move(check), false});
+        }
         else
-            unavailable_coupons.push_back({coupon, check, false});
+        {
+            unavailable_coupons.push_back({coupon, std::move(check), false});
+        }
     }
+
+    if(best_coupon)
+    {
+        for(auto& item : sorted_coupons)
+        {
+            if(item.coupon == best_coupon)
+            {
+                item.is_recommended = true;
+                break;
+            }
+        }
+    }
+
     std::sort(sorted_coupons.begin(), sorted_coupons.end(),
         [](const CouponEvaluationItem& a, const CouponEvaluationItem& b)
         {
@@ -140,7 +166,10 @@ std::vector<CouponEvaluationItem> CouponPlanner::evaluateAndSortAllCoupons(
             if(b.check.shortfall_amount>0) return false;
             return false;
         });
-    sorted_coupons.insert(sorted_coupons.end(), unavailable_coupons.begin(), unavailable_coupons.end());
+    sorted_coupons.insert(
+        sorted_coupons.end(),
+        std::make_move_iterator(unavailable_coupons.begin()),
+        std::make_move_iterator(unavailable_coupons.end()));
     return sorted_coupons;
 }
 

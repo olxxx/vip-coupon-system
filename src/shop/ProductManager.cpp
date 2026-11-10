@@ -6,65 +6,70 @@ namespace shop
 bool ProductManager::addProduct(std::shared_ptr<Product> product)
 {
     if(!product) return false;
-    if(hasProduct(product->getId())) return false;
-    products[product->getId()]=product;
-    return true;
+    const auto& id = product->getId();
+    return products.try_emplace(id, std::move(product)).second;
 }
 
 bool ProductManager::addProduct(std::string id, std::string name, core::ProductCategory category, double price, int stock)
 {
-    auto prod=std::make_shared<Product>(id, name, category, price, stock);
-    return addProduct(prod);
+    auto prod=std::make_shared<Product>(std::move(id), std::move(name), category, price, stock);
+    return addProduct(std::move(prod));
 }
 
 bool ProductManager::removeProduct(const std::string& id)
 {
-    if(!hasProduct(id)) return false;
-    products.erase(id);
-    return true;
+    return products.erase(id) > 0;
 }
 
 bool ProductManager::replenishProduct(const std::string& id, int count)
 {
-    if(!hasProduct(id)) return false;
-    return products[id]->replenishStock(count);
+    auto it = products.find(id);
+    if(it == products.end()) return false;
+    return it->second->replenishStock(count);
 }
 
 bool ProductManager::deductProduct(const std::string& id, int count)
 {
-    if(!hasProduct(id)) return false;
-    return products[id]->deductStock(count);
+    auto it = products.find(id);
+    if(it == products.end()) return false;
+    return it->second->deductStock(count);
 }
 
 bool ProductManager::setStock(const std::string& id, int stock)
 {
-    if(!hasProduct(id)) return false;
-    return products[id]->setStock(stock);
+    auto it = products.find(id);
+    if(it == products.end()) return false;
+    return it->second->setStock(stock);
 }
 
 bool ProductManager::updatePrice(const std::string& id, double price)
 {
-    if(!hasProduct(id)) return false;
-    return products[id]->setPrice(price);
+    auto it = products.find(id);
+    if(it == products.end()) return false;
+    return it->second->setPrice(price);
 }
 
 bool ProductManager::updateName(const std::string& id, const std::string& name)
 {
-    if(!hasProduct(id)) return false;
-    return products[id]->setName(name);
+    auto it = products.find(id);
+    if(it == products.end()) return false;
+    return it->second->setName(name);
 }
 
 bool ProductManager::updateCategory(const std::string& id, core::ProductCategory category)
 {
-    if(!hasProduct(id) || category == core::ProductCategory::ALL) return false;
-    products[id]->setCategory(category);
+    if(category == core::ProductCategory::ALL) return false;
+    auto it = products.find(id);
+    if(it == products.end()) return false;
+    it->second->setCategory(category);
     return true;
 }
 
 std::shared_ptr<Product> ProductManager::findProduct(const std::string& id) const
 {
-    if(!hasProduct(id)) return nullptr;
-    return products.at(id);
+    auto it = products.find(id);
+    if(it == products.end()) return nullptr;
+    return it->second;
 }
 
 std::vector<std::shared_ptr<Product>> ProductManager::searchByName(const std::string& name) const

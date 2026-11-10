@@ -14,6 +14,7 @@ int Cart::getTotalQuantity() const
 std::vector<CartItem> Cart::getItemslist() const
 {
     std::vector<CartItem> result;
+    result.reserve(item_order.size());
     for(const std::string& id:item_order) result.push_back(items.at(id));
     return result;
 }
@@ -42,51 +43,63 @@ bool Cart::addItem(std::shared_ptr<Product> product, int quantity)
     if(quantity<=0) return false;
     if(!product) return false;
 
-    int current_qty = getItemQuantity(product->getId());
+    const std::string& id = product->getId();
+    auto it = items.find(id);
+    int current_qty = (it != items.end()) ? it->second.quantity : 0;
     if(!product->hasStock(current_qty+quantity)) return false;
 
-    if(hasItem(product->getId()))
+    if(it != items.end())
     {
-        items[product->getId()].quantity+=quantity;
+        it->second.quantity+=quantity;
         return true;
     }
-    items[product->getId()] = CartItem{product, quantity};
-    item_order.push_back(product->getId());
+    item_order.push_back(id);
+    items.emplace(id, CartItem{std::move(product), quantity});
     return true;
 }
 
 bool Cart::removeItem(const std::string& productId)
 {
-    if(!hasItem(productId)) return false;
-    items.erase(productId);
+    auto it = items.find(productId);
+    if(it == items.end()) return false;
+    items.erase(it);
     item_order.erase(std::remove(item_order.begin(),item_order.end(),productId),item_order.end());
     return true;
 }
 
 bool Cart::updateQuantity(const std::string& productId, int quantity)
 {
-    if(!hasItem(productId)||quantity<0) return false;
+    if(quantity<0) return false;
     if(quantity==0)
         return removeItem(productId);
-    if(!items[productId].product->hasStock(quantity)) return false;
-    items[productId].quantity=quantity;
+    auto it = items.find(productId);
+    if(it == items.end()) return false;
+    if(!it->second.product->hasStock(quantity)) return false;
+    it->second.quantity=quantity;
     return true;
 }
 
 bool Cart::increaseQuantity(const std::string& productId, int step)
 {
-    if(!hasItem(productId)||step<0) return false;
-    if(!items[productId].product->hasStock(items[productId].quantity+step)) return false;
-    items[productId].quantity+=step;
+    if(step<0) return false;
+    auto it = items.find(productId);
+    if(it == items.end()) return false;
+    if(!it->second.product->hasStock(it->second.quantity+step)) return false;
+    it->second.quantity+=step;
     return true;
 }
 
 bool Cart::decreaseQuantity(const std::string& productId, int step)
 {
-    if(!hasItem(productId)||step<0||items[productId].quantity-step<0) return false;
-    items[productId].quantity-=step;
-    if(items[productId].quantity==0)
-        removeItem(productId);
+    if(step<0) return false;
+    auto it = items.find(productId);
+    if(it == items.end() || it->second.quantity-step<0) return false;
+    it->second.quantity-=step;
+    if(it->second.quantity==0)
+    {
+        items.erase(it);
+        item_order.erase(std::remove(item_order.begin(),item_order.end(),productId),item_order.end());
+    }
     return true;
 }
 

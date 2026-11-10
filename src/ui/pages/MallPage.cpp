@@ -97,16 +97,14 @@ void MallPage::refreshFilter() {
     if (kw.empty()) {
         filtered_products_ = ctx.prod_mgr.getProductsByCategory(cat);
     } else {
-        auto by_name = ctx.prod_mgr.searchByName(kw);
         auto by_cat = ctx.prod_mgr.getProductsByCategory(cat);
         filtered_products_.clear();
-        for (const auto& p : by_cat) {
+        filtered_products_.reserve(by_cat.size());
+        for (auto& p : by_cat) {
             if (!p) continue;
-            const bool name_hit = std::any_of(by_name.begin(), by_name.end(),
-                                              [&p](const auto& x) { return x && x->getId() == p->getId(); });
-            const bool id_hit = (p->getId().find(kw) != std::string::npos);
-            if (name_hit || id_hit) {
-                filtered_products_.push_back(p);
+            if (p->getName().find(kw) != std::string::npos ||
+                p->getId().find(kw) != std::string::npos) {
+                filtered_products_.push_back(std::move(p));
             }
         }
     }
