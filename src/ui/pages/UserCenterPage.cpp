@@ -107,7 +107,7 @@ UserCenterPage::UserCenterPage(AppContext& context)
         [this](int idx, bool /*active*/, bool /*focused*/) -> Element {
             const auto& c = shown_coupons_[static_cast<std::size_t>(idx)];
             const bool used = c->isUsed();
-            Element status_el = col(used ? "[已核销]" : "[可使用]", 11)
+            Element status_el = col(used ? "○ 已核销" : "● 可使用", 11)
                                 | bold | color(used ? theme::Muted : theme::Good);
             Element main_el = hbox({
                 col(c->getName(), 22) | (used ? color(theme::Muted) : bold),
@@ -431,7 +431,7 @@ Element UserCenterPage::renderAccountTab() {
                 dbox({
                     std::move(grad_gauge),
                     text(" " + std::to_string(pct) + "% ") | bold | color(Color::White) | center
-                }) | flex
+                }) | bgcolor(theme::BadgeBg) | flex
             }),
             separator() | color(theme::Muted),
             text(" 会员等级权益阶梯一览:") | bold | color(Color::GrayLight),

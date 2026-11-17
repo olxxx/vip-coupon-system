@@ -37,7 +37,7 @@ Element panel(const std::string& title, Element body, bool focused, PanelStyle s
 
     Element title_el = focused
         ? (text(icon + title + " ") | bold | color(focus_color))
-        : (text(" " + title + " ") | color(Color::GrayLight));
+        : hbox({text(icon) | color(theme::Muted), text(title + " ") | color(Color::GrayLight)});
     Element content = std::move(body) | color(Color::White);
     return window(std::move(title_el), std::move(content), ROUNDED)
            | color(focused ? focus_color : theme::Muted);
@@ -96,25 +96,59 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-//  胶囊色块按钮：操作类按钮自带 [文案] 边框标识与底色，彻底区分于普通静态文本
+//  色块胶囊按钮：分级底色 + 留白内边距（无方括号、无下划线）
 // ---------------------------------------------------------------------------
 struct ButtonPalette {
     Color fg;
-    Color focus_bg;
     bool bold_fg;
 };
 
 ButtonPalette paletteOf(ButtonKind kind) {
     switch (kind) {
-        case ButtonKind::Primary:   return {theme::Accent, theme::Accent, true};
-        case ButtonKind::Danger:    return {theme::Bad, theme::Bad, true};
-        case ButtonKind::Link:      return {theme::Accent, Color::White, true};
-        case ButtonKind::Tab:       return {Color::GrayLight, Color::White, false};
-        case ButtonKind::TabActive: return {Color::White, Color::White, true};
-        case ButtonKind::Disabled:  return {theme::Muted, theme::Muted, false};
+        case ButtonKind::Primary:   return {theme::Accent, true};
+        case ButtonKind::Danger:    return {theme::Bad, true};
+        case ButtonKind::Link:      return {theme::Accent, true};
+        case ButtonKind::Tab:       return {Color::GrayLight, false};
+        case ButtonKind::TabActive: return {theme::Accent, true};
+        case ButtonKind::Disabled:  return {theme::Muted, false};
         case ButtonKind::Secondary: break;
     }
-    return {Color::White, Color::White, false};
+    return {Color::White, false};
+}
+
+Element applyButtonStyle(Element el, ButtonKind kind, bool active) {
+    const ButtonPalette pal = paletteOf(kind);
+    if (active) {
+        Color active_bg = theme::CursorBg;
+        Color active_fg = Color::White;
+        if (kind == ButtonKind::Primary || kind == ButtonKind::TabActive) {
+            active_bg = theme::SelectCursorBg;
+        } else if (kind == ButtonKind::Danger) {
+            active_bg = theme::DangerHoverBg;
+        } else if (kind == ButtonKind::Tab) {
+            active_bg = theme::SurfaceBg;
+        } else if (kind == ButtonKind::Disabled) {
+            active_bg = theme::SurfaceBg;
+            active_fg = Color::GrayLight;
+        }
+        return std::move(el) | bold | color(active_fg) | bgcolor(active_bg);
+    }
+
+    if (kind == ButtonKind::Primary || kind == ButtonKind::TabActive) {
+        return std::move(el) | bold | color(Color::White) | bgcolor(theme::RowSelectBg);
+    }
+    if (kind == ButtonKind::Danger) {
+        return std::move(el) | bold | color(theme::Bad) | bgcolor(theme::DangerBg);
+    }
+    if (kind == ButtonKind::Secondary) {
+        return std::move(el) | color(Color::GrayLight) | bgcolor(theme::SurfaceBg);
+    }
+    if (kind == ButtonKind::Disabled) {
+        return std::move(el) | color(theme::Muted) | bgcolor(theme::BadgeBg);
+    }
+    // Link / Tab 常态保持轻量透明底
+    el = std::move(el) | color(pal.fg);
+    return pal.bold_fg ? (std::move(el) | bold) : std::move(el);
 }
 
 class StyledButtonComponent : public ComponentBase {
@@ -126,37 +160,9 @@ public:
 
     Element OnRender() override {
         const ButtonKind kind = kind_ ? kind_() : ButtonKind::Secondary;
-        const ButtonPalette pal = paletteOf(kind);
         const std::string raw = label_ ? label_() : std::string();
-
-        const bool is_nav_tab = (kind == ButtonKind::Tab ||
-                                 kind == ButtonKind::TabActive ||
-                                 kind == ButtonKind::Link);
-        const bool already_bracketed = !raw.empty() && (raw.front() == '[' || raw.back() == ']');
-
-        std::string display_str;
-        if (is_nav_tab || already_bracketed) {
-            display_str = " " + raw + " ";
-        } else {
-            display_str = "[" + raw + "]";
-        }
-
-        Element el = text(display_str);
-
-        if (Focused()) {
-            el = std::move(el) | bold | color(pal.fg) | bgcolor(theme::CursorBg) | underlined;
-        } else {
-            el = std::move(el) | color(pal.fg);
-            if (pal.bold_fg) el = std::move(el) | bold;
-            if (kind == ButtonKind::TabActive) {
-                el = std::move(el) | bgcolor(theme::RowSelectBg);
-            } else if (hovered_ && kind != ButtonKind::Disabled) {
-                el = std::move(el) | bgcolor(theme::CursorBg) | underlined;
-            } else if (!is_nav_tab) {
-                el = std::move(el) | bgcolor(theme::BadgeBg);
-            }
-        }
-        return std::move(el) | reflect(box_);
+        const bool active = Focused() || (hovered_ && kind != ButtonKind::Disabled);
+        return applyButtonStyle(text(" " + raw + " "), kind, active) | reflect(box_);
     }
 
     bool OnEvent(Event event) override {
@@ -187,7 +193,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-//  大号醒目主操作按钮（复刻原版登录按钮：外层圆角框 + 居中胶囊悬停/选中高亮效果）
+//  大号醒目主操作按钮（紧凑居中宽胶囊，无外框与下划线，带上下呼吸留白）
 // ---------------------------------------------------------------------------
 class StyledBigButtonComponent : public ComponentBase {
 public:
@@ -198,26 +204,15 @@ public:
 
     Element OnRender() override {
         const ButtonKind kind = kind_ ? kind_() : ButtonKind::Primary;
-        const ButtonPalette pal = paletteOf(kind);
         const std::string raw = label_ ? label_() : std::string();
+        const bool active = Focused() || (hovered_ && kind != ButtonKind::Disabled);
+        Element pill = applyButtonStyle(text("    " + raw + "    "), kind, active);
 
-        Element inner = text("[  " + raw + "  ]");
-        if (Focused()) {
-            inner = std::move(inner) | bold | color(pal.fg) | bgcolor(theme::CursorBg) | underlined;
-        } else {
-            inner = std::move(inner) | color(pal.fg);
-            if (pal.bold_fg) inner = std::move(inner) | bold;
-            if (hovered_ && kind != ButtonKind::Disabled) {
-                inner = std::move(inner) | bgcolor(theme::CursorBg) | underlined;
-            } else {
-                inner = std::move(inner) | bgcolor(theme::BadgeBg);
-            }
-        }
-
-        const Color border_c = (kind == ButtonKind::Disabled) ? theme::Muted : pal.fg;
-        return (std::move(inner) | center)
-               | borderStyled(ROUNDED, border_c)
-               | reflect(box_);
+        return vbox({
+            separatorEmpty(),
+            hbox({filler(), std::move(pill) | reflect(box_), filler()}),
+            separatorEmpty()
+        });
     }
 
     bool OnEvent(Event event) override {
@@ -445,7 +440,7 @@ public:
         for (int i = 0; i < n; ++i) {
             const bool sel = (i == *selected_);
             const bool cur = (focused && i == cursor_) || i == hover_;
-            Element el = text(" " + std::string(sel ? "(•)" : "( )") + (*labels_)[static_cast<std::size_t>(i)] + " ");
+            Element el = text(" " + std::string(sel ? "● " : "○ ") + (*labels_)[static_cast<std::size_t>(i)] + " ");
             if (sel) {
                 el = std::move(el) | bold | color(theme::Accent);
             } else {
@@ -581,8 +576,9 @@ Component TextInput(std::string* value,
     opt.on_change = std::move(on_change);
     opt.transform = [](InputState st) -> Element {
         Element el = std::move(st.element) | color(st.is_placeholder ? theme::Muted : Color::White);
-        const Color bg = st.focused ? theme::RowSelectBg : (st.hovered ? theme::CursorBg : theme::BadgeBg);
-        Element box = hbox({text(" "), std::move(el) | xflex, text(" ")}) | bgcolor(bg);
+        const Color bg = st.focused ? theme::RowHoverBg : (st.hovered ? theme::SurfaceBg : theme::BadgeBg);
+        Element lead = text(st.focused ? "▎" : " ") | color(st.focused ? theme::Accent : theme::Muted);
+        Element box = hbox({std::move(lead), std::move(el) | xflex, text(" ")}) | bgcolor(bg);
         return st.focused ? (std::move(box) | bold) : std::move(box);
     };
     return Make<InputComponent>(Input(value, placeholder, opt));

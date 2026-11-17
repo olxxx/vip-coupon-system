@@ -63,7 +63,7 @@ LoginPage::LoginPage(AppContext& context)
     auto pass_in  = Container::Tab({pass_msk, pass_pln}, &show_pw_idx_);
 
     auto eye_btn = StyledButton(
-        [this] { return std::string(show_pw_idx_ ? "[隐藏]" : "[显示]"); },
+        [this] { return std::string(show_pw_idx_ ? "隐藏" : "显示"); },
         [this] { show_pw_idx_ = 1 - show_pw_idx_; },
         [] { return ButtonKind::Secondary; });
 

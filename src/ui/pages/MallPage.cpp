@@ -64,7 +64,7 @@ MallPage::MallPage(AppContext& context, std::string welcome_msg)
 
     qty_dec_btn_  = ActionButton("-", [this] { add_qty_ = std::max(1, add_qty_ - 1); });
     qty_inc_btn_  = ActionButton("+", [this] { add_qty_ = std::min(999, add_qty_ + 1); });
-    add_cart_btn_ = BigActionButton("＋ 加入购物车", [this] { handleAddToCart(); }, ButtonKind::Primary);
+    add_cart_btn_ = BigActionButton("加入购物车", [this] { handleAddToCart(); }, ButtonKind::Primary);
     go_cart_btn_  = ActionButton("查看购物车", [this] {
         pending_action = PageAction::push(std::make_unique<CartPage>(ctx));
     });

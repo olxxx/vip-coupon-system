@@ -51,18 +51,19 @@ CouponSquarePage::CouponSquarePage(AppContext& context)
             const bool owned = cust ? ctx.cpn_mgr.hasUserHeldCoupon(*cust, c->getTemplateId()) : false;
 
             Element cost_el = c->isFree()
-                ? (col("[免费申领]", 12) | color(theme::Good))
-                : (col("[" + money(c->getCost()) + "购]", 12) | color(theme::Warn));
+                ? (col("● 免费申领", 12) | color(theme::Good))
+                : (col(money(c->getCost()) + " 购", 12) | color(theme::Warn));
 
             Element own_el = owned
-                ? (col("[已拥有]", 10) | bold | color(theme::Warn))
-                : col("", 10);
+                ? (col("已拥有", 9) | bold | color(theme::Warn))
+                : col("", 9);
 
             return hbox({
                 text(" "),
                 std::move(cost_el),
                 std::move(own_el),
-                col(c->getName(), 22) | (owned ? color(theme::Muted) : bold),
+                col(c->getName(), 25) | (owned ? color(theme::Muted) : bold),
+                text("  "),
                 text(c->getRuleDescription()) | color(Color::GrayLight)
             });
         },
@@ -233,8 +234,9 @@ Element CouponSquarePage::render() {
     Element table_header = hbox({
         text("  "),
         col("获取方式", 12),
-        col("持有状态", 10),
-        col("券面名称", 22),
+        col("持有状态", 9),
+        col("券面名称", 25),
+        text("  "),
         text("抵扣规则")
     }) | color(theme::Muted);
 

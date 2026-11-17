@@ -56,7 +56,7 @@ Component Page::buildCustomerNavBar(int active_tab) {
     auto btn_back_raw = StyledButton(
         [] { return "◀"; },
         [this] { pending_action = PageAction::pop(); },
-        [] { return ButtonKind::Primary; });
+        [] { return ButtonKind::Link; });
     auto btn_back = Maybe(btn_back_raw, can_go_back);
 
     auto btn_mall = makeNavTabButton(
@@ -261,7 +261,7 @@ Element Page::renderPopupBox() const {
         const bool focused = static_cast<int>(i) == popup_.cursor;
         Element b = text(" " + (is_ok ? std::string("确定") : popup_.navs[i].label) + " ");
         if (focused) b = b | bold | color(Color::Black) | bgcolor(is_ok ? tone : theme::Accent);
-        else b = b | color(is_ok ? Color::GrayLight : theme::Accent);
+        else b = b | color(is_ok ? Color::GrayLight : theme::Accent) | bgcolor(theme::SurfaceBg);
         if (!buttons.empty()) buttons.push_back(text("  "));
         buttons.push_back(std::move(b) | reflect(popup_.boxes[i]));
     }

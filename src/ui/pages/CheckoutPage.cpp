@@ -40,22 +40,24 @@ CheckoutPage::CheckoutPage(AppContext& context)
                 if (best) {
                     return hbox({
                         text(" "),
-                        col("[★最优推荐]", 13) | bold | color(theme::Good),
-                        col(best->getName(), 22) | bold,
-                        col(best->getRuleDescription(), 22) | color(Color::GrayLight),
+                        col("★ 最优推荐", 12) | bold | color(theme::Good),
+                        col(best->getName(), 20) | bold,
+                        text(" "),
+                        col(best->getRuleDescription(), 28) | color(Color::GrayLight),
+                        text(" "),
                         text("-" + money(saving)) | bold | color(theme::Good)
                     });
                 }
                 return hbox({
                     text(" "),
-                    col("[★最优推荐]", 13) | color(theme::Accent),
+                    col("★ 最优推荐", 12) | color(theme::Accent),
                     text("当前无满足条件的可用优惠券") | color(theme::Muted)
                 });
             }
             if (idx == 1) {
                 return hbox({
                     text(" "),
-                    col("[不使用券]", 13) | color(Color::GrayLight),
+                    col("— 不使用券", 12) | color(Color::GrayLight),
                     text("仅享受当前会员等级基础折扣") | color(theme::Muted)
                 });
             }
@@ -67,23 +69,25 @@ CheckoutPage::CheckoutPage(AppContext& context)
             Element tag_el;
             Element right_el;
             if (chk.is_eligible) {
-                tag_el = col(item.is_recommended ? "[★推荐]" : "[✓可用]", 13)
+                tag_el = col(item.is_recommended ? "★ 推荐" : "✓ 可用", 12)
                          | bold | color(theme::Good);
                 right_el = text("-" + money(chk.potential_discount)) | bold | color(theme::Good);
             } else {
-                tag_el = col("[✗不可用]", 13) | color(theme::Bad);
+                tag_el = col("✗ 不可用", 12) | color(theme::Bad);
                 std::string reason = chk.fail_reason;
                 if (chk.shortfall_amount > 1e-4) {
                     reason = "差" + money(chk.shortfall_amount) + "达标";
                 }
-                right_el = text("[" + reason + "]") | color(theme::Bad);
+                right_el = text(reason) | color(theme::Bad);
             }
 
             return hbox({
                 text(" "),
                 std::move(tag_el),
-                col(c->getName(), 22) | (chk.is_eligible ? nothing : color(theme::Muted)),
-                col(c->getRuleDescription(), 22) | color(theme::Muted),
+                col(c->getName(), 20) | (chk.is_eligible ? nothing : color(theme::Muted)),
+                text(" "),
+                col(c->getRuleDescription(), 28) | color(theme::Muted),
+                text(" "),
                 std::move(right_el)
             });
         },
@@ -218,18 +222,18 @@ Element CheckoutPage::render() {
         diag_box = vbox({
             separator() | color(theme::Muted),
             hbox({
-                text(" 四维诊断 [" + inspect_cpn->getName() + "]: ") | bold | color(theme::Accent),
+                text(" 四维诊断 · " + inspect_cpn->getName() + ": ") | bold | color(theme::Accent),
                 text(inspect_cpn->getTypeDescription()) | color(theme::Muted)
             }),
             hbox({
-                text(" [品类] ") | color(theme::Muted),
+                text(" 品类:") | color(theme::Muted),
                 text(core::getCategoryName(inspect_cpn->getTargetCategory()) + "(" + money(cat_base) + ")")
                     | color(Color::White),
-                text("  [门槛] ") | color(theme::Muted),
+                text("  门槛:") | color(theme::Muted),
                 text(min_txt) | bold | color(min_ok ? theme::Good : theme::Bad),
-                text("  [等级] ") | color(theme::Muted),
+                text("  等级:") | color(theme::Muted),
                 text(tier_txt) | bold | color(tier_ok ? theme::Good : theme::Bad),
-                text("  [时间] ") | color(theme::Muted),
+                text("  时间:") | color(theme::Muted),
                 text(time_txt) | bold | color(time_ok ? theme::Good : theme::Bad)
             })
         });
@@ -238,16 +242,18 @@ Element CheckoutPage::render() {
             separator() | color(theme::Muted),
             text(selected_idx_ == 1
                      ? " 当前选择：不使用优惠券，仅享受会员等级基础折扣。"
-                     : " 提示：背包中若无可用优惠券，可点击右下方 [去领券] 申领后再按 Esc 返回。")
+                     : " 提示：背包中若无可用优惠券，可点击右下方「去领券」申领后再按 Esc 返回。")
                 | color(theme::Muted)
         });
     }
 
     Element list_header = hbox({
         text("  "),
-        col("状态", 13),
-        col("券名称", 22),
-        col("规则说明", 22),
+        col("状态", 12),
+        col("券名称", 20),
+        text(" "),
+        col("规则说明", 28),
+        text(" "),
         text("诊断结果/抵扣额")
     }) | color(theme::Muted);
 
@@ -363,7 +369,7 @@ Element CheckoutPage::render() {
     }
 
     Element right_panel = panel("收银台账单明细", std::move(right_content), right_focused, PanelStyle::Highlight)
-                          | size(WIDTH, EQUAL, 48);
+                          | size(WIDTH, EQUAL, 45);
 
     return renderCustomerFrame(
         nav_bar_,

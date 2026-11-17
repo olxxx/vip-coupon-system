@@ -16,7 +16,7 @@ AdminPage::AdminPage(AppContext& context)
       c_cat_labels_({"全场", "数码3C", "服饰", "食品", "日用", "其他"}),
       c_tier_labels_({"V0", "V1", "V2", "V3", "V4", "V5"}),
       c_time_labels_({"不限时间", "仅限工作日", "仅限周末"}),
-      user_tier_labels_({"V0普通", "V1青铜", "V2白银", "V3黄金", "V4钻石", "V5至尊"}),
+      user_tier_labels_({"V0", "V1", "V2", "V3", "V4", "V5"}),
       admin_role_labels_({"运营管理员(Staff)", "超级管理员(Super)"}) {
     const auto adm = ctx.user_mgr.getCurrentAdmin();
     if (adm && adm->canModifyUserTier()) {
@@ -72,7 +72,6 @@ AdminPage::AdminPage(AppContext& context)
     auto top_row = Container::Horizontal({tab0_btn, tab1_btn, tab2_btn, reset_btn, logout_btn});
     top_bar_ = Renderer(top_row, [=] {
         return hbox({
-            filler(),
             tab0_btn->Render(),
             text("  "),
             tab1_btn->Render(),
@@ -80,7 +79,7 @@ AdminPage::AdminPage(AppContext& context)
             tab2_btn->Render(),
             filler(),
             reset_btn->Render(),
-            text(" "),
+            text("  "),
             logout_btn->Render()
         });
     });
@@ -453,14 +452,23 @@ bool AdminPage::handle_event(Event event, PageAction& out_action) {
 
 Element AdminPage::renderAdminHeader() {
     const auto adm = ctx.user_mgr.getCurrentAdmin();
-    const std::string adm_str = adm
-        ? (adm->getUsername() + " [" + adm->getRoleName() + "]")
-        : "未登录";
+    const std::string adm_name = adm ? adm->getUsername() : "未登录";
+    const std::string adm_role = adm ? adm->getRoleName() : "无";
 
-    return panel("后台运营控制台 (AdminPage)", hbox({
-        text(" 管理员: ") | color(theme::Muted),
-        text(adm_str) | bold | color(theme::Warn),
-        top_bar_->Render() | flex
+    Element info_row = hbox({
+        text(" 当前管理员: ") | color(theme::Muted),
+        text(adm_name) | bold | color(Color::White),
+        text("   权限角色: ") | color(theme::Muted),
+        text(adm_role) | bold | color(theme::Warn),
+        filler(),
+        text("系统状态: ") | color(theme::Muted),
+        text("运行中 ") | bold | color(theme::Good)
+    });
+
+    return panel("后台运营控制台", vbox({
+        std::move(info_row),
+        separator() | color(theme::Muted),
+        top_bar_->Render()
     }), top_bar_->Focused(), PanelStyle::Header);
 }
 
@@ -505,6 +513,7 @@ Element AdminPage::renderProductTab() {
         hbox({
             text("分类:") | color(theme::Muted),
             mod_cat_toggle_->Render() | flex,
+            text(" "),
             mod_cat_btn_->Render()
         })
     }), maint_focused, PanelStyle::Action);
@@ -610,6 +619,7 @@ Element AdminPage::renderUserTab() {
     Element cust_ops_content;
     if (!customers_.empty()) {
         const auto& sel_u = customers_[static_cast<std::size_t>(user_idx_)];
+        const auto target_cfg = core::getTierConfig(static_cast<core::UserTier>(target_tier_));
         cust_ops_content = vbox({
             hbox({
                 text("选中消费者: ") | color(theme::Muted),
@@ -622,7 +632,12 @@ Element AdminPage::renderUserTab() {
                 text("当前权限: ") | color(theme::Muted),
                 text(role_desc) | bold | color(is_super ? theme::Good : theme::Bad)
             }),
-            target_tier_toggle_->Render(),
+            hbox({
+                text("目标:") | color(theme::Muted),
+                target_tier_toggle_->Render(),
+                filler(),
+                text(target_cfg.name + " ") | color(theme::Warn)
+            }),
             hbox({
                 mod_tier_btn_->Render(),
                 filler(),
@@ -647,8 +662,8 @@ Element AdminPage::renderUserTab() {
 
     std::string sel_adm_name = admins_.empty()
         ? "无"
-        : (admins_[static_cast<std::size_t>(admin_idx_)]->getUsername() + " [" +
-           admins_[static_cast<std::size_t>(admin_idx_)]->getRoleName() + "]");
+        : (admins_[static_cast<std::size_t>(admin_idx_)]->getUsername() + " · " +
+           admins_[static_cast<std::size_t>(admin_idx_)]->getRoleName());
 
     Element adm_ops_box = panel("管理员账号管理 (RBAC)", vbox({
         kv("选中管理员:", text(sel_adm_name) | bold | color(theme::Accent)),
