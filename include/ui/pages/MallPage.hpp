@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/Page.hpp"
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -13,6 +14,7 @@ private:
     std::string search_kw_;
     int selected_idx_ = 0;
     int add_qty_ = 1;
+    std::chrono::steady_clock::time_point add_flash_start_{};
 
     std::vector<std::string> cat_labels_;
     std::vector<std::shared_ptr<shop::Product>> filtered_products_;

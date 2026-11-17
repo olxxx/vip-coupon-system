@@ -188,8 +188,11 @@ Element Page::renderCustomerHeader(const Component& nav_bar) const {
 
 Element Page::renderFooterBar(const std::string& key_hints) const {
     const bool has_msg = !status_msg.empty();
+    const Color msg_color = has_msg
+        ? pulseColor(status_anim_start_, 0.40, Color::White, theme::Good)
+        : theme::Muted;
     const Element msg_line = has_msg
-        ? hbox({text(" ✓ ") | bold | color(theme::Good), text(status_msg) | color(theme::Good) | flex})
+        ? hbox({text(" ✓ ") | bold | color(msg_color), text(status_msg) | color(msg_color) | flex})
         : hbox({text(" 就绪") | color(theme::Muted)});
     const Element hint_line = hbox({text(" " + key_hints) | color(theme::Muted), filler(),
         text("栈 " + std::to_string(ctx.stack_depth) + "/8 ") | color(theme::Muted)});
@@ -203,6 +206,7 @@ void Page::showPopup(std::string title, std::string msg, bool err) {
     popup_.error = err;
     popup_.title = std::move(title);
     popup_.msg = std::move(msg);
+    popup_.opened_at = std::chrono::steady_clock::now();
 
     // 推荐导航：仅消费者会话 + 错误提示
     if (err && ctx.user_mgr.getCurrentCustomer()) {
@@ -252,6 +256,7 @@ void Page::handlePopupEvent(Event event, PageAction& out_action) {
 
 Element Page::renderPopupBox() const {
     const Color tone = popup_.error ? theme::Bad : theme::Good;
+    const Color anim_tone = pulseColor(popup_.opened_at, 0.25, Color::White, tone);
     const std::string icon = popup_.error ? " ✗ " : " ✓ ";
 
     Elements buttons;
@@ -267,7 +272,7 @@ Element Page::renderPopupBox() const {
     }
 
     return vbox({
-               text(icon + popup_.title + " ") | bold | color(tone) | hcenter,
+               text(icon + popup_.title + " ") | bold | color(anim_tone) | hcenter,
                separator() | color(Color::GrayDark),
                paragraph(popup_.msg) | color(Color::White) | xflex,
                text(""),
@@ -276,7 +281,7 @@ Element Page::renderPopupBox() const {
                text("←/→ 切换 · Enter 确认 · Esc 关闭") | color(theme::Muted) | hcenter,
            }) |
            size(WIDTH, GREATER_THAN, 36) | size(WIDTH, LESS_THAN, 56) |
-           borderStyled(ROUNDED, tone) | clear_under | center;
+           borderStyled(ROUNDED, anim_tone) | clear_under | center;
 }
 
 Element Page::renderWithPopup() {

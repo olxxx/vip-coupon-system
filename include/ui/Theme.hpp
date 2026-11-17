@@ -7,6 +7,7 @@
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/color.hpp>
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
@@ -124,5 +125,17 @@ ftxui::Component DataList(int* selected,
                           std::function<ftxui::Element(int index, bool active, bool focused)> row_fn,
                           std::function<void()> on_select = {},
                           const std::string& empty_hint = "暂无数据");
+
+// --- 轻量帧动画辅助原语（动画结束后自动停止请求重绘，零空闲开销） ---
+float easeOutCubic(float t);
+double animProgress(std::chrono::steady_clock::time_point start, double duration_sec);
+ftxui::Color pulseColor(std::chrono::steady_clock::time_point start,
+                         double duration_sec,
+                         ftxui::Color flash,
+                         ftxui::Color base);
+ftxui::Color fadeInColor(std::chrono::steady_clock::time_point start,
+                          double delay_sec,
+                          double duration_sec,
+                          ftxui::Color target);
 
 } // namespace ui

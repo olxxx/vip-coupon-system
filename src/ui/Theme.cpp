@@ -1,5 +1,7 @@
 #include "ui/Theme.hpp"
 
+#include <ftxui/component/animation.hpp>
+
 #include <algorithm>
 #include <memory>
 #include <utility>
@@ -515,6 +517,49 @@ private:
 };
 
 } // namespace
+
+float easeOutCubic(float t) {
+    const float u = 1.0f - std::clamp(t, 0.0f, 1.0f);
+    return 1.0f - u * u * u;
+}
+
+double animProgress(std::chrono::steady_clock::time_point start, double duration_sec) {
+    if (start == std::chrono::steady_clock::time_point{} || duration_sec <= 0.0) {
+        return 1.0;
+    }
+    const double elapsed = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - start).count();
+    const double p = std::clamp(elapsed / duration_sec, 0.0, 1.0);
+    if (p < 1.0) {
+        animation::RequestAnimationFrame();
+    }
+    return p;
+}
+
+Color pulseColor(std::chrono::steady_clock::time_point start,
+                 double duration_sec,
+                 Color flash,
+                 Color base) {
+    const double p = animProgress(start, duration_sec);
+    if (p >= 1.0) return base;
+    return Color::Interpolate(easeOutCubic(static_cast<float>(p)), flash, base);
+}
+
+Color fadeInColor(std::chrono::steady_clock::time_point start,
+                  double delay_sec,
+                  double duration_sec,
+                  Color target) {
+    if (start == std::chrono::steady_clock::time_point{} || duration_sec <= 0.0) {
+        return target;
+    }
+    const double elapsed = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - start).count();
+    const double p = std::clamp((elapsed - delay_sec) / duration_sec, 0.0, 1.0);
+    if (p < 1.0) {
+        animation::RequestAnimationFrame();
+    }
+    return Color::Interpolate(easeOutCubic(static_cast<float>(p)), theme::BadgeBg, target);
+}
 
 Component PassTab(Component child) {
     return Make<PassTabComponent>(std::move(child));

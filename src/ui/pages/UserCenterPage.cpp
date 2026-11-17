@@ -47,6 +47,7 @@ UserCenterPage::UserCenterPage(AppContext& context)
             std::move(label_fn),
             [this, target] {
                 sub_tab_ = target;
+                if (target == 0) progress_anim_start_ = std::chrono::steady_clock::now();
                 syncData();
             },
             [this, target] { return sub_tab_ == target ? ButtonKind::TabActive : ButtonKind::Tab; });
@@ -78,9 +79,15 @@ UserCenterPage::UserCenterPage(AppContext& context)
     });
 
     // --- Tab 0: 账户充值与修改密码 ---
-    quick_100_btn_  = ActionButton("+¥100", [this] { notify(ctx.recharge(100.0)); syncData(); });
-    quick_500_btn_  = ActionButton("+¥500", [this] { notify(ctx.recharge(500.0)); syncData(); });
-    quick_1000_btn_ = ActionButton("+¥1000", [this] { notify(ctx.recharge(1000.0)); syncData(); });
+    auto do_quick_recharge = [this](double amt) {
+        auto res = ctx.recharge(amt);
+        notify(res);
+        if (res.success) balance_anim_start_ = std::chrono::steady_clock::now();
+        syncData();
+    };
+    quick_100_btn_  = ActionButton("+¥100", [do_quick_recharge] { do_quick_recharge(100.0); });
+    quick_500_btn_  = ActionButton("+¥500", [do_quick_recharge] { do_quick_recharge(500.0); });
+    quick_1000_btn_ = ActionButton("+¥1000", [do_quick_recharge] { do_quick_recharge(1000.0); });
 
     custom_input_ = TextInput(&recharge_input_, "充值金额", false, [this] { handleCustomRecharge(); });
     confirm_recharge_btn_ = ActionButton("确认充值", [this] { handleCustomRecharge(); }, true);
@@ -205,6 +212,7 @@ UserCenterPage::UserCenterPage(AppContext& context)
 }
 
 void UserCenterPage::on_enter() {
+    progress_anim_start_ = std::chrono::steady_clock::now();
     syncData();
 }
 
@@ -282,7 +290,9 @@ void UserCenterPage::handleCustomRecharge() {
         setStatus("充值金额无效：请输入大于 0 的数字（最多两位小数）", true);
         return;
     }
-    notifyImportant(ctx.recharge(amt, "个人中心自定义充值"));
+    auto res = ctx.recharge(amt, "个人中心自定义充值");
+    notifyImportant(res);
+    if (res.success) balance_anim_start_ = std::chrono::steady_clock::now();
     syncData();
 }
 
@@ -321,6 +331,7 @@ bool UserCenterPage::handle_event(Event event, PageAction& out_action) {
     if (!handled) {
         if (event == Event::F1) {
             sub_tab_ = 0;
+            progress_anim_start_ = std::chrono::steady_clock::now();
             syncData();
             handled = true;
         } else if (event == Event::F2) {
@@ -333,10 +344,12 @@ bool UserCenterPage::handle_event(Event event, PageAction& out_action) {
             handled = true;
         } else if (event == Event::Character('[')) {
             sub_tab_ = (sub_tab_ + 2) % 3;
+            if (sub_tab_ == 0) progress_anim_start_ = std::chrono::steady_clock::now();
             syncData();
             handled = true;
         } else if (event == Event::Character(']')) {
             sub_tab_ = (sub_tab_ + 1) % 3;
+            if (sub_tab_ == 0) progress_anim_start_ = std::chrono::steady_clock::now();
             syncData();
             handled = true;
         } else if (event == Event::Character('c') || event == Event::Character('C')) {
@@ -367,7 +380,9 @@ Element UserCenterPage::renderAccountTab() {
     const auto tier = cust->getTier();
     const auto tcfg = core::getTierConfig(tier);
     const double progress = cust->getGrowthProgress();
-    const int pct = static_cast<int>(std::round(progress * 100.0));
+    const double anim_p = animProgress(progress_anim_start_, 0.50);
+    const double shown_progress = progress * static_cast<double>(easeOutCubic(static_cast<float>(anim_p)));
+    const int pct = static_cast<int>(std::round(shown_progress * 100.0));
 
     std::string next_hint;
     if (cust->isMaxTier()) {
@@ -410,7 +425,7 @@ Element UserCenterPage::renderAccountTab() {
         ladder_rows.push_back(std::move(row));
     }
 
-    Element grad_gauge = gauge(static_cast<float>(progress))
+    Element grad_gauge = gauge(static_cast<float>(shown_progress))
                          | color(LinearGradient().Angle(0).Stop(theme::Accent).Stop(theme::Good))
                          | flex;
 
@@ -444,10 +459,11 @@ Element UserCenterPage::renderAccountTab() {
                                   quick_1000_btn_->Focused() || custom_input_->Focused() ||
                                   confirm_recharge_btn_->Focused();
 
+    const Color bal_color = pulseColor(balance_anim_start_, 0.45, Color::White, theme::Good);
     Element recharge_panel = panel(
         "账户余额充值",
         vbox({
-            kv(" 当前可用余额:", text(money(cust->getBalance())) | bold | color(theme::Good)),
+            kv(" 当前可用余额:", text(money(cust->getBalance())) | bold | color(bal_color)),
             separator() | color(theme::Muted),
             hbox({
                 text(" 快捷面额: ") | color(theme::Muted),

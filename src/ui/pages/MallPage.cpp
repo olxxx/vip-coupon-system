@@ -130,7 +130,11 @@ void MallPage::handleAddToCart() {
         return;
     }
     const auto& sel = filtered_products_[static_cast<std::size_t>(selected_idx_)];
-    notify(ctx.addToCart(sel->getId(), add_qty_));
+    auto res = ctx.addToCart(sel->getId(), add_qty_);
+    notify(res);
+    if (res.success) {
+        add_flash_start_ = std::chrono::steady_clock::now();
+    }
 }
 
 bool MallPage::handle_event(Event event, PageAction& out_action) {
@@ -216,7 +220,8 @@ Element MallPage::render() {
             kv(" 当前库存:", text(std::to_string(sel->getStock()) + " 件")
                              | bold | color(stock_color)),
             kv(" 购物车已加:", text(std::to_string(in_cart) + " 件")
-                               | bold | color(in_cart > 0 ? theme::Accent : theme::Muted)),
+                               | bold | color(pulseColor(add_flash_start_, 0.40, Color::White,
+                                                      in_cart > 0 ? theme::Accent : theme::Muted))),
             filler(),
             separator() | color(theme::Muted),
             hbox({

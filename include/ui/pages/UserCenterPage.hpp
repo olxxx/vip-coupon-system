@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/Page.hpp"
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -10,6 +11,8 @@ namespace ui {
 class UserCenterPage : public Page {
 private:
     int sub_tab_ = 0; // 0: 账户充值与安全, 1: 我的卡券背包, 2: 账单流水历史
+    std::chrono::steady_clock::time_point progress_anim_start_ = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point balance_anim_start_{};
 
     // Tab 0: 充值与修改密码
     std::string recharge_input_ = "500";

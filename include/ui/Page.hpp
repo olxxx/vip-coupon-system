@@ -7,6 +7,7 @@
 #include <ftxui/component/event.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
@@ -47,6 +48,7 @@ protected:
     PageAction pending_action = PageAction::none();
     std::string status_msg;
     bool is_error = false;
+    std::chrono::steady_clock::time_point status_anim_start_{};
 
 public:
     explicit Page(AppContext& context, std::string init_msg = "")
@@ -86,6 +88,7 @@ private:
         std::string msg;
         std::vector<PopupNav> navs; // 推荐导航；末尾追加的"确定"按钮不在其中
         int cursor = 0;             // 0..navs.size()，navs.size() 即"确定"
+        std::chrono::steady_clock::time_point opened_at{};
         mutable std::vector<ftxui::Box> boxes; // 各按钮屏幕区域，供鼠标命中检测
     } popup_;
 
@@ -107,6 +110,7 @@ protected:
         }
         status_msg = std::move(msg);
         is_error = false;
+        status_anim_start_ = std::chrono::steady_clock::now();
     }
 
     // 打开模态弹窗 (错误时按消息关键词附带推荐导航)

@@ -123,7 +123,9 @@ LoginPage::LoginPage(AppContext& context)
                   text(" "), eye_btn->Render()}),
             hintLine(pass_empty, "请输入密码"),
             login_btn->Render(),
-            hbox({reg_btn->Render(), text("   "), quit_btn->Render()}) | hcenter,
+            (role_tab_ == 0
+                ? hbox({reg_btn->Render(), text("   "), quit_btn->Render()})
+                : quit_btn->Render()) | hcenter,
             separator() | color(theme::Muted),
             text(" 演示账号 (↑/↓ 选择, Enter/单击填入):") | color(theme::Muted),
             preset_list->Render(),

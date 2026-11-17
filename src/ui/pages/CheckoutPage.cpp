@@ -3,7 +3,10 @@
 #include "ui/pages/MallPage.hpp"
 #include "ui/pages/UserCenterPage.hpp"
 
+#include <ftxui/component/animation.hpp>
+
 #include <algorithm>
+#include <cmath>
 
 namespace ui {
 
@@ -162,6 +165,7 @@ void CheckoutPage::executePayment() {
     if (res.success) {
         paid_success_ = true;
         receipt_ = std::move(rec);
+        paid_anim_start_ = std::chrono::steady_clock::now();
         pay_btn_->TakeFocus();
     } else {
         syncEvaluations();
@@ -275,24 +279,39 @@ Element CheckoutPage::render() {
     Element right_content;
     if (paid_success_ && receipt_.valid) {
         const double total_saved = receipt_.member_saving + receipt_.coupon_saving;
-        Element upgrade_banner = receipt_.upgraded_tier_name.empty()
-            ? text(" 会员等级保持不变") | color(theme::Muted)
-            : (text(" ★ 恭喜晋升: " + receipt_.old_tier_name + " -> " + receipt_.upgraded_tier_name)
-               | bold | color(theme::Warn));
+        auto fade = [this](double delay, Color target) {
+            return fadeInColor(paid_anim_start_, delay, 0.22, target);
+        };
+
+        Element upgrade_banner;
+        if (receipt_.upgraded_tier_name.empty()) {
+            upgrade_banner = text(" 会员等级保持不变") | color(fade(0.42, theme::Muted));
+        } else {
+            Color upg_color = fade(0.42, theme::Warn);
+            const double elapsed = std::chrono::duration<double>(
+                std::chrono::steady_clock::now() - paid_anim_start_).count();
+            if (elapsed >= 0.42 && elapsed < 1.25) {
+                const float wave = 0.5f + 0.5f * static_cast<float>(std::sin((elapsed - 0.42) * 14.0));
+                upg_color = Color::Interpolate(wave, theme::Warn, Color::White);
+                animation::RequestAnimationFrame();
+            }
+            upgrade_banner = text(" ★ 恭喜晋升: " + receipt_.old_tier_name + " -> " + receipt_.upgraded_tier_name)
+                             | bold | color(upg_color);
+        }
 
         right_content = vbox({
-            text(" ✓ 订单支付已完成 (支付回执单)") | bold | color(theme::Good),
+            text(" ✓ 订单支付已完成 (支付回执单)") | bold | color(fade(0.00, theme::Good)),
             separator() | color(theme::Muted),
-            kv(" 商品原价总额:", money(receipt_.origin_total)),
-            kv(" 会员折扣让利:", text("- " + money(receipt_.member_saving)) | color(theme::Good)),
+            kv(" 商品原价总额:", text(money(receipt_.origin_total)) | color(fade(0.06, Color::White))),
+            kv(" 会员折扣让利:", text("- " + money(receipt_.member_saving)) | color(fade(0.12, theme::Good))),
             kv(" 优惠券抵扣 (" + receipt_.coupon_name + "):",
-               text("- " + money(receipt_.coupon_saving)) | color(theme::Good)),
-            kv(" 本单累计节省:", text(money(total_saved)) | bold | color(theme::Good)),
+               text("- " + money(receipt_.coupon_saving)) | color(fade(0.18, theme::Good))),
+            kv(" 本单累计节省:", text(money(total_saved)) | bold | color(fade(0.24, theme::Good))),
             separator() | color(theme::Muted),
-            kv(" 最终实付金额:", text(money(receipt_.final_paid)) | bold | color(theme::Warn)),
+            kv(" 最终实付金额:", text(money(receipt_.final_paid)) | bold | color(fade(0.30, theme::Warn))),
             kv(" 账户余额变动:",
                text(money(receipt_.balance_before) + " -> " + money(receipt_.balance_after))
-                   | color(theme::Accent)),
+                   | color(fade(0.36, theme::Accent))),
             std::move(upgrade_banner),
             filler(),
             separator() | color(theme::Muted),

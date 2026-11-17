@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ui/Page.hpp"
+#include <chrono>
 #include <vector>
 
 namespace ui {
@@ -10,6 +11,7 @@ private:
     int selected_idx_ = 0; // 0: 自动最优推荐, 1: 不使用优惠券, 2..N+1: 具体卡券
     bool paid_success_ = false;
     PaymentReceipt receipt_;
+    std::chrono::steady_clock::time_point paid_anim_start_{};
     std::vector<shop::CouponEvaluationItem> eval_items_;
 
     ftxui::Component nav_bar_;
