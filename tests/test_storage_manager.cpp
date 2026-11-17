@@ -67,15 +67,18 @@ int main()
         assert(demo_user && demo_user->getBalance() >= 2000.0);
 
         // 验证默认商品库
-        assert(prod_mgr.size() >= 10);
+        assert(prod_mgr.size() >= 18);
         assert(prod_mgr.hasProduct("P1001")); // 机械键盘
+        assert(prod_mgr.hasProduct("P2004")); // 商务双肩背包 (低库存凑单)
         assert(prod_mgr.hasProduct("P5001")); // 限量版手办 (售罄项)
         assert(prod_mgr.findProduct("P5001")->isOutOfStock());
 
         // 验证默认优惠券库
-        assert(cpn_mgr.size() >= 5);
+        assert(cpn_mgr.size() >= 10);
         assert(cpn_mgr.hasCoupon("TPL_CASH_05"));
         assert(cpn_mgr.hasCoupon("TPL_THRESHOLD_200_30"));
+        assert(cpn_mgr.hasCoupon("TPL_CLOTHING_150_25"));
+        assert(cpn_mgr.hasCoupon("TPL_DIAMOND_2000_350"));
 
         std::cout << "[PASS] 2. 冷启动种子数据注入与磁盘自动落盘测试通过" << std::endl;
     }

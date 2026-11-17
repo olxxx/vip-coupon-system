@@ -324,12 +324,15 @@ public:
                 row = std::move(row) | bgcolor(theme::CursorBg);
             }
             row = std::move(row) | reflect(boxes_[static_cast<std::size_t>(i)]);
-            if ((focused && i == cursor_) || (!focused && sel)) {
-                row = std::move(row) | focus;
-            }
             rows.push_back(std::move(row));
         }
-        return vbox(std::move(rows)) | vscroll_indicator | yframe | reflect(box_) | flex;
+        const int half_view = (box_.y_max > box_.y_min) ? ((box_.y_max - box_.y_min) / 2) : 0;
+        return vbox(std::move(rows))
+               | focusPosition(0, scroll_top_ + half_view)
+               | vscroll_indicator
+               | yframe
+               | reflect(box_)
+               | flex;
     }
 
     bool OnEvent(Event event) override {
@@ -342,20 +345,23 @@ public:
             if (cursor_ <= 0) return false; // 到顶后交给父容器移动焦点
             --cursor_;
             hover_ = -1;
+            ensureVisible(cursor_, n);
             return true;
         }
         if (event == Event::ArrowDown) {
             if (cursor_ >= n - 1) return false;
             ++cursor_;
             hover_ = -1;
+            ensureVisible(cursor_, n);
             return true;
         }
-        if (event == Event::Home) { cursor_ = 0; hover_ = -1; return true; }
-        if (event == Event::End) { cursor_ = n - 1; hover_ = -1; return true; }
-        if (event == Event::PageUp) { cursor_ = std::max(0, cursor_ - 10); hover_ = -1; return true; }
-        if (event == Event::PageDown) { cursor_ = std::min(n - 1, cursor_ + 10); hover_ = -1; return true; }
+        if (event == Event::Home) { cursor_ = 0; hover_ = -1; ensureVisible(cursor_, n); return true; }
+        if (event == Event::End) { cursor_ = n - 1; hover_ = -1; ensureVisible(cursor_, n); return true; }
+        if (event == Event::PageUp) { cursor_ = std::max(0, cursor_ - 10); hover_ = -1; ensureVisible(cursor_, n); return true; }
+        if (event == Event::PageDown) { cursor_ = std::min(n - 1, cursor_ + 10); hover_ = -1; ensureVisible(cursor_, n); return true; }
         if (event == Event::Return) {
             select(cursor_);
+            ensureVisible(cursor_, n);
             return true;
         }
         return false;
@@ -364,6 +370,25 @@ public:
     bool Focusable() const override { return true; }
 
 private:
+    int viewportRows() const {
+        return (box_.y_max >= box_.y_min) ? (box_.y_max - box_.y_min + 1) : 1;
+    }
+
+    void clampScroll(int n) {
+        const int max_top = std::max(0, n - viewportRows());
+        scroll_top_ = std::clamp(scroll_top_, 0, max_top);
+    }
+
+    void ensureVisible(int idx, int n) {
+        const int view_rows = viewportRows();
+        if (idx < scroll_top_) {
+            scroll_top_ = idx;
+        } else if (idx >= scroll_top_ + view_rows) {
+            scroll_top_ = idx - view_rows + 1;
+        }
+        clampScroll(n);
+    }
+
     int sync() {
         const int n = std::max(0, count_fn_ ? count_fn_() : 0);
         if (selected_) {
@@ -371,6 +396,7 @@ private:
         }
         cursor_ = (n > 0) ? std::clamp(cursor_, 0, n - 1) : 0;
         if (hover_ >= n) hover_ = -1;
+        clampScroll(n);
         return n;
     }
 
@@ -383,12 +409,13 @@ private:
         const Mouse& m = event.mouse();
         const bool inside = box_.Contain(m.x, m.y);
 
+        // 滚轮仅滑动可视窗口，不抢焦点、不改光标与选中项
         if (m.button == Mouse::WheelUp || m.button == Mouse::WheelDown) {
             if (!inside || n == 0) return false;
-            const int next = std::clamp(cursor_ + (m.button == Mouse::WheelUp ? -1 : 1), 0, n - 1);
-            cursor_ = next;
+            const int delta = (m.button == Mouse::WheelUp) ? -1 : 1;
+            scroll_top_ += delta;
+            clampScroll(n);
             hover_ = -1;
-            TakeFocus();
             return true;
         }
 
@@ -406,6 +433,7 @@ private:
             TakeFocus();
             cursor_ = hover_;
             select(hover_);
+            ensureVisible(cursor_, n);
             return true;
         }
         return false;
@@ -418,6 +446,7 @@ private:
     std::string empty_hint_;
     int cursor_ = 0;
     int hover_ = -1;
+    int scroll_top_ = 0;
     Box box_;
     std::vector<Box> boxes_;
 };

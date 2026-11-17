@@ -271,19 +271,31 @@ void StorageManager::seedDefaultData(user::UserManager& user_mgr,
     ));
     user_mgr.loadCustomerDirect(alice_user);
 
-    // B. 注入典型商品库 (覆盖品类、高低库存与售罄)
+    // B. 注入典型商品库 (18 件：覆盖 5 大品类、价位梯度、凑单小件、低库存预警与售罄项；预留 P1004 供后台演示上架)
     prod_mgr.addProduct("P1001", "机械键盘", core::ProductCategory::DIGITAL, 399.0, 50);
     prod_mgr.addProduct("P1002", "轻薄笔记本电脑", core::ProductCategory::DIGITAL, 5999.0, 20);
     prod_mgr.addProduct("P1003", "入耳式无线耳机", core::ProductCategory::DIGITAL, 299.0, 100);
+    prod_mgr.addProduct("P1005", "65W氮化镓快充头", core::ProductCategory::DIGITAL, 99.0, 65);
+    prod_mgr.addProduct("P1006", "27英寸4K显示器", core::ProductCategory::DIGITAL, 1899.0, 4);
+
     prod_mgr.addProduct("P2001", "连帽工装夹克", core::ProductCategory::CLOTHING, 259.0, 30);
     prod_mgr.addProduct("P2002", "纯棉休闲T恤", core::ProductCategory::CLOTHING, 89.0, 80);
+    prod_mgr.addProduct("P2003", "轻量透气跑鞋", core::ProductCategory::CLOTHING, 459.0, 18);
+    prod_mgr.addProduct("P2004", "商务双肩背包", core::ProductCategory::CLOTHING, 199.0, 3);
+
     prod_mgr.addProduct("P3001", "精选混合坚果礼盒", core::ProductCategory::FOOD, 128.0, 40);
     prod_mgr.addProduct("P3002", "原味有机牛奶整箱", core::ProductCategory::FOOD, 65.0, 60);
+    prod_mgr.addProduct("P3003", "冷萃黑咖啡礼盒", core::ProductCategory::FOOD, 78.0, 45);
+    prod_mgr.addProduct("P3004", "进口车厘子礼盒", core::ProductCategory::FOOD, 228.0, 5);
+
     prod_mgr.addProduct("P4001", "不锈钢真空保温杯", core::ProductCategory::DAILY, 79.0, 50);
     prod_mgr.addProduct("P4002", "深层洁净洗衣凝珠", core::ProductCategory::DAILY, 49.0, 5);
-    prod_mgr.addProduct("P5001", "限量版纪念手办", core::ProductCategory::OTHER, 499.0, 0); // 售罄测试项
+    prod_mgr.addProduct("P4003", "电动声波牙刷套装", core::ProductCategory::DAILY, 189.0, 35);
 
-    // C. 注入全套预设优惠券模板 (满减、折扣、立减；免费券与付费券；品类限制与时间限制)
+    prod_mgr.addProduct("P5001", "限量版纪念手办", core::ProductCategory::OTHER, 499.0, 0); // 售罄测试项
+    prod_mgr.addProduct("P5002", "潮流文创笔记本套装", core::ProductCategory::OTHER, 59.0, 42);
+
+    // C. 注入全套预设优惠券模板 (10 张：覆盖 3 券种、5 品类、3 时段、免费与付费购券、V0~V4 等级阶梯)
     // 1. 经典无门槛立减券 (免费)
     cpn_mgr.registerCouponToPool(std::make_shared<shop::CashCoupon>(
         "TPL_CASH_05", "新用户无门槛红包", 0.0, 5.0,
@@ -298,25 +310,60 @@ void StorageManager::seedDefaultData(user::UserManager& user_mgr,
         core::TimeConstraint::ANYTIME, 30.0
     ));
 
-    // 3. 数码专属周末大额满减券 (付费 10 元购买，需青铜 V1 会员)
+    // 3. 白银会员全场大额满减券 (免费，需白银 V2 会员)
     cpn_mgr.registerCouponToPool(std::make_shared<shop::ThresholdCoupon>(
-        "TPL_DIGITAL_WEEKEND_100", "周末数码特惠满1000减150", 10.0, 1000.0,
-        core::ProductCategory::DIGITAL, core::UserTier::V1_BRONZE,
-        core::TimeConstraint::WEEKEND_ONLY, 150.0
+        "TPL_THRESHOLD_500_80", "全场大额满500减80", 0.0, 500.0,
+        core::ProductCategory::ALL, core::UserTier::V2_SILVER,
+        core::TimeConstraint::ANYTIME, 80.0
     ));
 
-    // 4. 食品生鲜品类 85 折扣券 (免费，工作日可用)
+    // 4. 服饰鞋包专属满减券 (免费)
+    cpn_mgr.registerCouponToPool(std::make_shared<shop::ThresholdCoupon>(
+        "TPL_CLOTHING_150_25", "服饰焕新满150减25", 0.0, 150.0,
+        core::ProductCategory::CLOTHING, core::UserTier::V0_NORMAL,
+        core::TimeConstraint::ANYTIME, 25.0
+    ));
+
+    // 5. 食品生鲜品类 85 折扣券 (免费，仅限工作日可用)
     cpn_mgr.registerCouponToPool(std::make_shared<shop::DiscountCoupon>(
         "TPL_FOOD_DISCOUNT_85", "工作日美食85折券", 0.0, 100.0, 0.85,
         core::ProductCategory::FOOD, core::UserTier::V0_NORMAL,
         core::TimeConstraint::WEEKDAY_ONLY, 50.0
     ));
 
-    // 5. 尊享会员 9 折大券 (付费 20 元购买，需黄金 V3 会员，最高减 300)
+    // 6. 日用百货品类 88 折扣券 (免费)
+    cpn_mgr.registerCouponToPool(std::make_shared<shop::DiscountCoupon>(
+        "TPL_DAILY_88", "日用百货满100享88折", 0.0, 100.0, 0.88,
+        core::ProductCategory::DAILY, core::UserTier::V0_NORMAL,
+        core::TimeConstraint::ANYTIME, 40.0
+    ));
+
+    // 7. 周末无门槛立减券 (付费 5 元购买，需青铜 V1 会员，仅限周末可用)
+    cpn_mgr.registerCouponToPool(std::make_shared<shop::CashCoupon>(
+        "TPL_WEEKEND_CASH_20", "周末惊喜立减20券", 5.0, 20.0,
+        core::ProductCategory::ALL, core::UserTier::V1_BRONZE,
+        core::TimeConstraint::WEEKEND_ONLY
+    ));
+
+    // 8. 数码专属周末大额满减券 (付费 10 元购买，需青铜 V1 会员，仅限周末可用)
+    cpn_mgr.registerCouponToPool(std::make_shared<shop::ThresholdCoupon>(
+        "TPL_DIGITAL_WEEKEND_100", "周末数码满1000减150", 10.0, 1000.0,
+        core::ProductCategory::DIGITAL, core::UserTier::V1_BRONZE,
+        core::TimeConstraint::WEEKEND_ONLY, 150.0
+    ));
+
+    // 9. 黄金会员 9 折大券 (付费 20 元购买，需黄金 V3 会员，最高减 300)
     cpn_mgr.registerCouponToPool(std::make_shared<shop::DiscountCoupon>(
         "TPL_VIP_DISCOUNT_90", "黄金专享全场9折券", 20.0, 500.0, 0.90,
         core::ProductCategory::ALL, core::UserTier::V3_GOLD,
         core::TimeConstraint::ANYTIME, 300.0
+    ));
+
+    // 10. 钻石会员大额满减券 (付费 30 元购买，需钻石 V4 会员)
+    cpn_mgr.registerCouponToPool(std::make_shared<shop::ThresholdCoupon>(
+        "TPL_DIAMOND_2000_350", "钻石尊享满2000减350", 30.0, 2000.0,
+        core::ProductCategory::ALL, core::UserTier::V4_DIAMOND,
+        core::TimeConstraint::ANYTIME, 350.0
     ));
 }
 
