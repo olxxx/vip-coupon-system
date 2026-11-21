@@ -13,32 +13,35 @@
 
 #include <nlohmann/json.hpp>
 
+using namespace std;
+
 namespace user {
 
     class CustomerAccount : public Account {
     private:
-        double balance = 0.0;
-        double total_spent = 0.0;
-        core::UserTier tier = core::UserTier::V0_NORMAL;
+        double balance = 0.0;//余额
+        double total_spent = 0.0;//总花销
+        core::UserTier tier = core::UserTier::V0_NORMAL;//一开始设为普通会员
 
-        std::vector<std::shared_ptr<shop::Coupon>> coupons;
-        std::vector<std::unique_ptr<TransactionRecord>> transactions;
+        vector<std::shared_ptr<shop::Coupon>> coupons;//动态数组+智能指针(shop::Coupon:优惠券基类)
+        vector<std::unique_ptr<TransactionRecord>> transactions;//交易流水集合
 
     public:
         CustomerAccount(std::string username,
-            std::string password,
-            std::string created_at,
-            double initial_balance = 1000.0);
+            string password,
+            string created_at,
+            double initial_balance = 1000.0);//构造函数，新注册用户，默认初始余额1000元
 
         CustomerAccount(std::string username,
-            std::string password,
-            std::string created_at,
+            string password,
+            string created_at,
             double balance,
             double total_spent,
-            core::UserTier tier);
+            core::UserTier tier);//构造函数重载，可以用来恢复存档
 
         core::AccountType getAccountType() const override;
         std::string getDisplaySummary() const override;
+        //重写纯虚函数
 
         double getBalance() const;
         double getTotalSpent() const;
@@ -50,14 +53,14 @@ namespace user {
         void setTotalSpent(double new_total_spent);
 
         void recharge(double amount,
-            const std::string& channel = "系统充值");
+            const string& channel = "系统充值");
 
         bool deductBalance(double amount,
-            const std::string& order_id);
+            const string& order_id);
 
         bool deductForCoupon(double amount,
-            const std::string& coupon_name,
-            const std::string& template_id);
+            const string& coupon_name,
+            const string& template_id);
 
         bool checkAndPerformUpgrade(std::string& out_upgrade_message);
 
@@ -110,4 +113,4 @@ namespace user {
         );
     };
     
-} // namespace user
+} // 公有继承Account

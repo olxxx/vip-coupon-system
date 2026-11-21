@@ -26,10 +26,10 @@ namespace user {
     // 账单记录抽象基类
     class TransactionRecord {
     protected:
-        std::string record_id;    // 唯一流水号
-        std::string timestamp;    // 产生时间 (格式: YYYY-MM-DD HH:MM:SS)
-        double amount;            // 变动金额 (元，升级记录该项为 0.0)
-        TransactionType type;     // 记录类型
+        std::string record_id;    // 流水号
+        std::string timestamp;    // 产生时间（时间戳）
+        double amount;            // 变动金额
+        TransactionType type;     // 账单记录类型
 
         nlohmann::json toJsonBase() const {
             return nlohmann::json{
@@ -50,28 +50,25 @@ namespace user {
         const std::string& getRecordId() const { return record_id; }
         const std::string& getTimestamp() const { return timestamp; }
         double getAmount() const { return amount; }
-        TransactionType getType() const { return type; }//读取这条流水记录的类型
+        TransactionType getType() const { return type; }//读取这条流水记录的类型（枚举类型）
         std::string getTypeName() const { return getTransactionTypeName(type); }
 
-        // 生成全局唯一流水号 (如 RECHARGE_1762084512987_1)
-        static std::string generateId(const std::string& prefix);
+        
+        static std::string generateId(const std::string& prefix);// 生成流水号 
 
-        // 纯虚接口：格式化单行对账文本
-        // 行为描述：以对齐的排版输出流水摘要，例如："[账户充值] 2026-10-28 12:00:00 +¥500.00"
-        virtual std::string getFormattedText() const = 0;
+        virtual std::string getFormattedText() const = 0; // 纯虚函数，统一账单格式，例如："[账户充值] 2026-10-28 12:00:00 +¥500.00"
 
-        // 多态 JSON 序列化
         virtual nlohmann::json toJson() const = 0;
     };
 
     // 派生类 1：充值记录
     class RechargeRecord : public TransactionRecord {
     private:
-        std::string channel; // 充值渠道 (如 "微信支付", "兑换码")
+        std::string channel; // 充值渠道 （"Wechat","支付宝"）
     public:
         RechargeRecord(std::string id, std::string time, double amount, std::string channel);
         const std::string& getChannel() const { return channel; }
-        std::string getFormattedText() const override;
+        std::string getFormattedText() const override;//重写纯虚getFormattedText
         nlohmann::json toJson() const override;
         static std::unique_ptr<RechargeRecord> fromJson(const nlohmann::json& j);
     };
@@ -93,7 +90,7 @@ namespace user {
     // 派生类 3：付费购券支出记录
     class PurchaseCouponRecord : public TransactionRecord {
     private:
-        std::string template_id;   // 购买的优惠券模板 ID
+        std::string template_id;   // 购买的优惠券模板
         std::string coupon_name;   // 购买的券名称
     public:
         PurchaseCouponRecord(std::string id, std::string time, double amount, std::string tpl_id, std::string cpn_name);

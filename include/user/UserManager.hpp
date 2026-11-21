@@ -18,20 +18,20 @@ namespace user {
     class UserManager {
     private:
         std::unordered_map<
-            std::string,
-            std::shared_ptr<CustomerAccount>
-        > customers;
+            std::string,//用户名
+            std::shared_ptr<CustomerAccount>//指向用户的智能指针
+        > customers;//哈希表
 
         std::unordered_map<
             std::string,
-            std::shared_ptr<AdminAccount>
+            std::shared_ptr<AdminAccount>//指向管理员
         > admins;
 
-        std::shared_ptr<CustomerAccount> current_customer;
-        std::shared_ptr<AdminAccount> current_admin;
+        std::shared_ptr<CustomerAccount> current_customer;//当前登录的消费者指针
+        std::shared_ptr<AdminAccount> current_admin;//当前登录的管理员指针
 
     public:
-        UserManager() = default;
+        UserManager() = default;//构造函数
 
         std::size_t size() const;
         std::size_t getCustomerCount() const;

@@ -107,7 +107,7 @@ Component Page::buildCustomerNavBar(int active_tab) {
         btn_back, btn_mall, btn_cart, btn_coupon, btn_user, btn_day, btn_logout
     });
 
-    return Renderer(row, [=, this] {
+    return Renderer(row, [=] {
         const bool show_back = can_go_back();
         Element left_back = show_back ? btn_back->Render() : text("   ");
         Element center_tabs = hbox({

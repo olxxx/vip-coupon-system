@@ -13,13 +13,13 @@ namespace user {
             const int value = static_cast<int>(tier);
             return value >= static_cast<int>(core::UserTier::V0_NORMAL)
                 && value <= static_cast<int>(core::UserTier::V5_SUPREME);
-        }
+        }//判断是否是合法会员等级
 
     } // namespace
 
     std::size_t UserManager::size() const {
         return customers.size() + admins.size();
-    }
+    }//size()返回哈希表的键值对数量
 
     std::size_t UserManager::getCustomerCount() const {
         return customers.size();
@@ -31,18 +31,18 @@ namespace user {
 
     bool UserManager::empty() const {
         return customers.empty() && admins.empty();
-    }
+    }//哈希表是否为空
 
     void UserManager::clear() {
         customers.clear();
-        admins.clear();
+        admins.clear();//清空哈希表
         current_customer.reset();
-        current_admin.reset();
+        current_admin.reset();//清空当前指针（退出登录）
     }
 
     bool UserManager::hasCustomer(const std::string& username) const {
-        return customers.find(username) != customers.end();
-    }
+        return customers.find(username) != customers.end();//end()表示查找失败的位置
+    }//是否存在制定用户名
 
     bool UserManager::hasAdmin(const std::string& username) const {
         return admins.find(username) != admins.end();
@@ -53,8 +53,8 @@ namespace user {
             current_customer.reset();
         }
 
-        return customers.erase(username) > 0;
-    }
+        return customers.erase(username) > 0;//erase()返回1或0，删除成功为1
+    }//判断是否删除成功，若成功则为true
 
     bool UserManager::removeAdmin(const std::string& username) {
         if (current_admin && current_admin->getUsername() == username) {
@@ -89,7 +89,7 @@ namespace user {
         customers.emplace(username, std::move(customer));
 
         return core::Result::ok("注册成功");
-    }
+    }//用户注册
 
     core::Result UserManager::registerAdmin(
         const std::string& username,
@@ -118,7 +118,7 @@ namespace user {
         admins.emplace(username, std::move(admin));
 
         return core::Result::ok("管理员账号创建成功");
-    }
+    }//管理员注册
 
     core::Result UserManager::loginCustomer(
         const std::string& username,
@@ -137,7 +137,7 @@ namespace user {
         current_admin.reset();
 
         return core::Result::ok("登录成功");
-    }
+    }//登录用户账号
 
     core::Result UserManager::loginAdmin(
         const std::string& username,
@@ -156,12 +156,12 @@ namespace user {
         current_customer.reset();
 
         return core::Result::ok("管理员登录成功");
-    }
+    }//登录管理员账号
 
     void UserManager::logout() {
         current_customer.reset();
         current_admin.reset();
-    }
+    }//登出
 
     bool UserManager::isLoggedIn() const {
         return isCustomerLoggedIn() || isAdminLoggedIn();
@@ -184,6 +184,7 @@ namespace user {
         UserManager::getCurrentAdmin() const {
         return current_admin;
     }
+    //返回指针
 
     std::string UserManager::getCurrentUsername() const {
         if (current_customer) {
@@ -195,7 +196,7 @@ namespace user {
         }
 
         return "";
-    }
+    }//返回名字
 
     core::AccountType UserManager::getCurrentAccountType() const {
         if (isAdminLoggedIn()) {
@@ -203,7 +204,7 @@ namespace user {
         }
 
         return core::AccountType::CUSTOMER;
-    }
+    }//类型
 
     std::shared_ptr<CustomerAccount> UserManager::findCustomer(
         const std::string& username
@@ -214,7 +215,7 @@ namespace user {
         }
 
         return iterator->second;
-    }
+    }//返回指向用户的指针
 
     std::shared_ptr<AdminAccount> UserManager::findAdmin(
         const std::string& username
@@ -230,11 +231,11 @@ namespace user {
     std::vector<std::shared_ptr<CustomerAccount>>
         UserManager::getAllCustomers() const {
         std::vector<std::shared_ptr<CustomerAccount>> result;
-        result.reserve(customers.size());
+        result.reserve(customers.size());//提前给result分配空间
 
         for (const auto& entry : customers) {
             result.push_back(entry.second);
-        }
+        }//账号指针全部放进result
 
         std::sort(
             result.begin(),
@@ -242,7 +243,7 @@ namespace user {
             [](const auto& left, const auto& right) {
                 return left->getUsername() < right->getUsername();
             }
-        );
+        );//升序排列
 
         return result;
     }
@@ -291,7 +292,7 @@ namespace user {
 
         customer->forceSetTier(new_tier);
         return core::Result::ok("会员等级修改成功");
-    }
+    }//修改会员等级
 
     void UserManager::addAdmin(
         std::shared_ptr<AdminAccount> admin
@@ -306,7 +307,7 @@ namespace user {
         }
 
         admins.emplace(admin->getUsername(), std::move(admin));
-    }
+    }//增加管理员
 
     const std::unordered_map<
         std::string,

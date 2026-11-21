@@ -21,14 +21,14 @@ namespace user {
     } // namespace
 
     std::string TransactionRecord::generateId(const std::string& prefix) {
-        static std::atomic<std::uint64_t> sequence{ 0 };
+        static std::atomic<std::uint64_t> sequence{ 0 };//定义一个计数器，保证多线程执行
 
         const auto milliseconds =
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()
-            ).count();
+            ).count();//获取时间差作为流水号的时间部分，count()函数来自头文件chrono
 
-        std::ostringstream stream;
+        std::ostringstream stream;//利用stream，写入内存字符串
         stream << prefix
             << "_"
             << milliseconds
@@ -38,7 +38,9 @@ namespace user {
         return stream.str();
     }
 
-    // ---------------RechargeRecord:账户的充值记录--------------- 
+
+    
+    // RechargeRecord:账户的充值记录 
 
     RechargeRecord::RechargeRecord(std::string id,
         std::string time,
@@ -65,7 +67,7 @@ namespace user {
         json["type_code"] = static_cast<int>(getType());//读取RECHANGE的枚举类型
         json["channel"] = channel;
         return json;
-    }//整体来说是序列化，把对象变成JSON的一条充值记录，用于保存
+    }//序列化，把对象变成JSON的一条充值记录，用于保存
 
     std::unique_ptr<RechargeRecord> RechargeRecord::fromJson(
         const nlohmann::json& json
@@ -83,7 +85,9 @@ namespace user {
         }
     }
 
-    // ---------------ExpenseRecord:消费记录---------------
+
+
+    // ExpenseRecord:消费记录
 
     ExpenseRecord::ExpenseRecord(std::string id,
         std::string time,
@@ -133,7 +137,9 @@ namespace user {
         }
     }
 
-    // ---------------PurchaseCouponRecord:买优惠券消费记录---------------
+
+
+    // PurchaseCouponRecord:买优惠券消费记录
 
     PurchaseCouponRecord::PurchaseCouponRecord(std::string id,
         std::string time,
@@ -183,7 +189,8 @@ namespace user {
         }
     }
 
-    // ---------------UpgradeRecord:升级记录---------------
+
+    // UpgradeRecord:升级记录
 
     UpgradeRecord::UpgradeRecord(std::string id,
         std::string time,

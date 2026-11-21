@@ -15,7 +15,7 @@ namespace user {
             return core::AdminRole::STAFF;
         }
 
-    } // namespace
+    } // namespace 使用命名空间，明确这是内部辅助函数，其他cpp文件不能调用它
 
     AdminAccount::AdminAccount(std::string name,
         std::string password,
@@ -26,11 +26,11 @@ namespace user {
             std::move(password),
             std::move(creation_time)),
         role(initial_role) {
-    }
+    }//构造函数，move不复制字符串内容
 
     core::AccountType AdminAccount::getAccountType() const {
         return core::AccountType::ADMIN;
-    }
+    }//返回枚举值
 
     std::string AdminAccount::getDisplaySummary() const {
         return getUsername() + " | " + getRoleName();
@@ -38,7 +38,7 @@ namespace user {
 
     core::AdminRole AdminAccount::getRole() const {
         return role;
-    }
+    }//返回枚举值
 
     std::string AdminAccount::getRoleName() const {
         return role == core::AdminRole::SUPER_ADMIN
@@ -48,33 +48,33 @@ namespace user {
 
     void AdminAccount::setRole(core::AdminRole new_role) {
         role = new_role;
-    }
+    }//设置或修改角色
 
     bool AdminAccount::canModifyUserTier() const {
         return role == core::AdminRole::SUPER_ADMIN;
-    }
+    }//判断是不是超级管理员——有没有修改用户等级的权限
 
     bool AdminAccount::canManageInventory() const {
         return true;
-    }
+    }//都可以管理商品
 
     bool AdminAccount::canIssueCoupons() const {
         return true;
-    }
+    }//都可以管理优惠券
 
     bool AdminAccount::canResetSystem() const {
         return role == core::AdminRole::SUPER_ADMIN;
-    }
+    }//是否有权限重置系统
 
     nlohmann::json AdminAccount::toJson() const {
-        nlohmann::json json = toJsonBase();
+        nlohmann::json json = toJsonBase();//调用基类函数，取得账户共有的字段
 
         json["role"] = static_cast<int>(role);
         json["role_name"] = getRoleName();
         json["account_type"] = "ADMIN";
 
         return json;
-    }
+    }//当前管理员对象转换成一份完整的JSON
 
     std::shared_ptr<AdminAccount> AdminAccount::fromJson(
         const nlohmann::json& json
@@ -90,6 +90,6 @@ namespace user {
         catch (const std::exception&) {
             return nullptr;
         }
-    }
+    }//若成功，返回一个指向AdminAccount的指针
 
 } // namespace user

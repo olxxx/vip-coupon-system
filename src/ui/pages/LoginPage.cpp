@@ -107,7 +107,7 @@ LoginPage::LoginPage(AppContext& context)
         preset_list,
     }, &focus_idx_);
 
-    container = Renderer(form, [=, this] {
+    container = Renderer(form, [=] {
         const bool user_empty = attempted_ && trim(username_).empty();
         const bool pass_empty = attempted_ && password_.empty();
 

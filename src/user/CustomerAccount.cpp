@@ -10,22 +10,23 @@
 
 namespace user {
 
-    //放在匿名空间的辅助函数
+    
     namespace {
 
         core::UserTier parseTier(int value) {
             if (value < static_cast<int>(core::UserTier::V0_NORMAL)
                 || value > static_cast<int>(core::UserTier::V5_SUPREME)) {
                 return core::UserTier::V0_NORMAL;
+                //超过设定的，一律记为V0
             }
 
             return static_cast<core::UserTier>(value);//整数转枚举
-        }//core::UserTier在include/common/Types.hpp中
+        }
 
-    } // namespace
+    } // namespace，辅助函数
 
 
-    //构造函数-----注册新用户-----
+    
     CustomerAccount::CustomerAccount(std::string name,
         std::string password,
         std::string creation_time,
@@ -35,9 +36,9 @@ namespace user {
             std::move(password),
             std::move(creation_time)),
         balance(std::max(0.0, initial_balance)) {
-    }
+    }//构造函数 注册新用户
 
-    //构造函数-----读取存档-----
+    
     CustomerAccount::CustomerAccount(std::string name,
         std::string password,
         std::string creation_time,
@@ -49,13 +50,13 @@ namespace user {
             std::move(password),
             std::move(creation_time)),
         balance(std::max(0.0, restored_balance)),
-        total_spent(std::max(0.0, restored_total_spent)),
+        total_spent(std::max(0.0, restored_total_spent)),//若是非法负数会被修正为0.0
         tier(restored_tier) {
-    }
+    }//构造函数 读取存档
 
     core::AccountType CustomerAccount::getAccountType() const {
         return core::AccountType::CUSTOMER;
-    }//纯虚函数，返回账户类型：消费者
+    }//重写Account中纯虚函数，返回账户类型
 
     std::string CustomerAccount::getDisplaySummary() const {
         std::ostringstream stream;
@@ -67,7 +68,7 @@ namespace user {
             << std::setprecision(2)
             << balance;
         return stream.str();
-    }//生成账户summary，eg:  gyc | 白银会员 | 余额：¥850.50
+    }//重写，生成账户summary，eg:  gyc | 白银会员 | 余额：¥850.50
 
     double CustomerAccount::getBalance() const {
         return balance;
@@ -83,7 +84,7 @@ namespace user {
 
     std::string CustomerAccount::getTierName() const {
         return core::getTierConfig(tier).name;
-    }
+    }//Types.hpp中的函数getTierConfig
 
     double CustomerAccount::getDiscountRate() const {
         return core::getTierConfig(tier).discount_rate;
